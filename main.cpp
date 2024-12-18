@@ -1,23 +1,24 @@
 #include <iostream> 
+#include <vector>
 using namespace std;
 
-const uint64_t A_FILE = 0x0101010101010101LL;
-const uint64_t B_FILE = 0x0202020202020202LL;
-const uint64_t C_FILE = 0x0303030303030303LL;
-const uint64_t D_FILE = 0x0404040404040404LL;
-const uint64_t E_FILE = 0x0505050505050505LL;
-const uint64_t F_FILE = 0x0606060606060606LL;
-const uint64_t G_FILE = 0x0707070707070707LL;
-const uint64_t H_FILE = 0x8080808080808080LL;
+const uint64_t A_FILE = 0x0101010101010101;
+const uint64_t B_FILE = 0x0202020202020202;
+const uint64_t C_FILE = 0x0303030303030303;
+const uint64_t D_FILE = 0x0404040404040404;
+const uint64_t E_FILE = 0x0505050505050505;
+const uint64_t F_FILE = 0x0606060606060606;
+const uint64_t G_FILE = 0x0707070707070707;
+const uint64_t H_FILE = 0x8080808080808080;
 
-const uint64_t RANK_1 = 0x00000000000000FFLL;
-const uint64_t RANK_2 = 0x000000000000FF00LL;
-const uint64_t RANK_3 = 0x0000000000FF0000LL;
-const uint64_t RANK_4 = 0x00000000FF000000LL;
-const uint64_t RANK_5 = 0x000000FF00000000LL;
-const uint64_t RANK_6 = 0x0000FF0000000000LL;
-const uint64_t RANK_7 = 0x00FF000000000000LL;
-const uint64_t RANK_8 = 0xFF00000000000000LL;
+const uint64_t RANK_1 = 0x00000000000000FF;
+const uint64_t RANK_2 = 0x000000000000FF00;
+const uint64_t RANK_3 = 0x0000000000FF0000;
+const uint64_t RANK_4 = 0x00000000FF000000;
+const uint64_t RANK_5 = 0x000000FF00000000;
+const uint64_t RANK_6 = 0x0000FF0000000000;
+const uint64_t RANK_7 = 0x00FF000000000000;
+const uint64_t RANK_8 = 0xFF00000000000000;
 
 
 
@@ -106,9 +107,11 @@ class Board {
 
     bool turn = true; // true = white, false = black;
     int color = 0, piece = 0, start = 0, end = 0;
-
+    uint64_t whiteLegalMoves = 0;
+    uint64_t blackLegalMoves = 0;
 
 public:
+    vector<uint32_t> moveList;
 
     void initializeGame() {
         blackQueen = (1LL << 3);
@@ -142,20 +145,24 @@ public:
             cout << 8-i << "  ";
             for(int j = 0; j < 8; j++){
                 int mask = i*8 + j;
-                char piece = '.';
-                if((blackQueen >> mask) & 1) piece = 'q';
-                else if((blackPawn >> mask) & 1) piece = 'p';
-                else if((blackBishop >> mask) & 1) piece = 'b';
-                else if((blackKing >> mask) & 1) piece = 'k';
-                else if((blackRook >> mask) & 1) piece = 'r';
-                else if((blackKnight >> mask) & 1) piece = 'n';
+                string piece = ".";
+                if((blackQueen >> mask) & 1) piece = "♛";
+                else if((blackPawn >> mask) & 1) piece = "♟";
+                else if((blackBishop >> mask) & 1) piece = "♝";
+                else if((blackKing >> mask) & 1) piece = "♚";
+                else if((blackRook >> mask) & 1) piece = "♜";
+                else if((blackKnight >> mask) & 1) piece = "♞";
 
-                else if((whiteQueen >> mask) & 1) piece = 'Q';
-                else if((whitePawn >> mask) & 1) piece = 'P';
-                else if((whiteBishop >> mask) & 1) piece = 'B';
-                else if((whiteKing >> mask) & 1) piece = 'K';
-                else if((whiteRook >> mask) & 1) piece = 'R';
-                else if((whiteKnight >> mask) & 1) piece = 'N';
+                else if((whiteQueen >> mask) & 1) piece = "♕";
+                else if((whitePawn >> mask) & 1) piece = "♙";
+                else if((whiteBishop >> mask) & 1) piece = "♗";
+                else if((whiteKing >> mask) & 1) piece = "♔";
+                else if((whiteRook >> mask) & 1) piece = "♖";
+                else if((whiteKnight >> mask) & 1) piece = "♘";
+
+                if((whiteLegalMoves >> mask) & 1) {
+                    piece = "_";
+                };
                 cout << piece << " ";
             }
             cout << "\n";
@@ -184,12 +191,14 @@ public:
             else if(c == 'Q') whiteQueen |= (1LL << set);
             else if(c == 'K') whiteKing |= (1LL << set);
             else if(c == 'P') whitePawn |= (1LL << set);
-            else if(isdigit(c)) j += (c - '0' - 1);
+            else if(isdigit(c)) {
+                // Skip the specified number of empty squares
+                j += (c - '0') - 1;
+            }
             j++;
         }
         whitePieces = whiteBishop | whiteKing | whitePawn | whiteKnight | whiteQueen | whiteRook;
         blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
-
     }
 
     void evaluateBoard(){
@@ -197,238 +206,25 @@ public:
         for(int file = 0; file < 8; file++){
             for(int rank = 0; rank < 8; rank++){
                 int mask = file*8 + rank;
-                if((blackQueen >> mask) & 1) score -= 9 + white_queen[64-mask];
-                else if((blackPawn >> mask) & 1) score -= 1 + white_pawn[64-mask];
-                else if((blackBishop >> mask) & 1) score -= 3 + white_bishop[64-mask];
-                // else if((blackKing >> mask) & 1) score -= ;
-                else if((blackRook >> mask) & 1) score -= 5 + white_rook[64-mask];
-                else if((blackKnight >> mask) & 1) score -= 3 + white_knight[64-mask];
+                if((blackQueen >> mask) & 1) score -= 9 + white_queen[63-mask];
+                else if((blackPawn >> mask) & 1) score -= 1 + white_pawn[63-mask];
+                else if((blackBishop >> mask) & 1) score -= 3 + white_bishop[63-mask];
+                else if((blackKing >> mask) & 1) score -= white_king[63-mask];
+                else if((blackRook >> mask) & 1) score -= 5 + white_rook[63-mask];
+                else if((blackKnight >> mask) & 1) score -= 3 + white_knight[63-mask];
 
                 else if((whiteQueen >> mask) & 1) score += 9 + white_queen[mask];
                 else if((whitePawn >> mask) & 1) score += 1 + white_pawn[mask];
                 else if((whiteBishop >> mask) & 1) score += 3 + white_bishop[mask];
-                // else if((whiteKing >> mask) & 1) score += 0;
+                else if((whiteKing >> mask) & 1) score += white_king[mask];
                 else if((whiteRook >> mask) & 1) score += 5 + white_rook[mask];
                 else if((whiteKnight >> mask) & 1) score += 3 + white_knight[mask];
+
+                if(whiteKing & blackLegalMoves) score -= 1000;
+                if(blackKing & whiteLegalMoves) score += 1000;
             }
         }
         cout << score << "\n";
-    }
-
-    uint64_t generateMovesWhiteKing(){
-        uint64_t temp = (
-                    (whiteKing >> 8) | (whiteKing << 8) | // North, south
-                    ((whiteKing << 1) & ~A_FILE) | // left
-                    ((whiteKing >> 1) & ~H_FILE) | // right
-                    ((whiteKing << 9) & ~A_FILE) | // north-east
-                    ((whiteKing >> 7) & ~A_FILE) | // south-east
-                    ((whiteKing << 7) & ~H_FILE) | // north-west
-                    ((whiteKing >> 9) & ~H_FILE)  // south-west
-                );
-        temp &= ~whitePieces;
-        return temp;
-    }
-
-    uint64_t generateMovesWhiteRook(){
-        uint64_t movesWhiteRook = 0;
-        uint64_t rook = whiteRook;
-            while(rook){
-                uint64_t singleRook = rook & -rook;
-                uint64_t rookMoves = 0;
-                uint64_t shift = singleRook;
-                while(true) {
-                    shift <<= 8; // north
-                    if(shift == 0) break;
-                    if(shift & whitePieces) break;
-                    rookMoves |= shift;
-                    if(shift & blackPieces) break;
-                }
-                shift = singleRook;
-                while(true) {
-                    shift >>= 8; // south
-                    if(shift == 0) break;
-                    if(shift & whitePieces) break;
-                    rookMoves |= shift;
-                    if(shift & blackPieces) break;
-                }
-                shift = singleRook;
-                while(true) {
-                    shift = (shift & ~H_FILE) << 1; // east 
-                    if(shift == 0) break;
-                    if(shift & whitePieces) break;
-                    rookMoves |= shift;
-                    if(shift & blackPieces) break;
-                }  
-
-                shift = singleRook;
-                while(true) {
-                    shift = (shift & ~A_FILE) >> 1; // west 
-                    if(shift == 0) break;
-                    if(shift & whitePieces) break;
-                    rookMoves |= shift;
-                    if(shift & blackPieces) break;
-                }  
-                movesWhiteRook |= rookMoves;
-                rook &= rook - 1;
-            }
-        return movesWhiteRook;
-    }
-    
-    uint64_t generateMovesWhiteQueen(){
-        uint64_t movesWhiteQueen = 0;
-            
-            uint64_t queen = whiteQueen;
-            while(true){
-                queen >>= 8; // north
-                if(queen == 0) break;
-                if(queen & whitePieces) break;
-                movesWhiteQueen |= queen;
-                if(queen & blackPieces) break;
-            }
-            queen = whiteQueen;
-            while(true){
-                queen <<= 8; // south
-                if(queen == 0) break;
-                if(queen & whitePieces) break;
-                movesWhiteQueen |= queen;
-                if(queen & blackPieces) break;
-            }
-            queen = whiteQueen;
-            while(true){
-                queen = (queen & ~A_FILE) >> 1; // west
-                if(queen == 0) break;
-                if(queen & whitePieces) break;
-                movesWhiteQueen |= queen;
-                if(queen & blackPieces) break;
-            }
-            queen = whiteQueen;
-            while(true){
-                queen = (queen & ~H_FILE) << 1; // east
-                if(queen == 0) break;
-                if(queen & whitePieces) break;
-                movesWhiteQueen |= queen;
-                if(queen & blackPieces) break;
-            }
-            // diagonals
-            queen = whiteQueen;
-            while(true){
-                // queen <<= 7; // south-west
-                queen = (queen & ~A_FILE) << 7;
-                if(queen == 0) break;
-                if(queen & whitePieces) break;
-                movesWhiteQueen |= queen;
-                if(queen & blackPieces) break;
-            }
-            queen = whiteQueen;
-            while(true){
-                // queen <<= 9; // south-east
-                queen = (queen & ~H_FILE) << 9;
-                if(queen == 0) break;
-                if(queen & whitePieces) break;
-                movesWhiteQueen |= queen;
-                if(queen & blackPieces) break;
-            }
-            queen = whiteQueen;
-            while(true){
-                // queen >>= 7; // north-east
-                queen = (queen & ~H_FILE) >> 7;
-                if(queen == 0) break;
-                if(queen & whitePieces) break;
-                movesWhiteQueen |= queen;
-                if(queen & blackPieces) break;
-            }
-            queen = whiteQueen;
-            while(true){
-                queen = (queen & ~A_FILE) >> 9; // north-west
-                if(queen == 0) break;
-                if(queen & whitePieces) break;
-                movesWhiteQueen |= queen;
-                if(queen & blackPieces) break;
-            }
-        return movesWhiteQueen;
-    }
-
-    uint64_t generateMovesWhiteBishop(){
-        uint64_t movesWhiteBishop = 0;
-            uint64_t bishop = 0;
-
-            bishop = whiteBishop;
-            while(true){
-                // bishop <<= 7; // south-west
-                bishop = (bishop & ~A_FILE) << 7;
-                if(bishop == 0) break;
-                if(bishop & whitePieces) break;
-                movesWhiteBishop |= bishop;
-                if(bishop & blackPieces) break;
-            }
-            bishop = whiteBishop;
-            while(true){
-                // bishop <<= 9; // south-east
-                bishop = (bishop & ~H_FILE) << 9;
-                if(bishop == 0) break;
-                if(bishop & whitePieces) break;
-                movesWhiteBishop |= bishop;
-                if(bishop & blackPieces) break;
-            }
-            bishop = whiteBishop;
-            while(true){
-                // bishop >>= 7; // north-east
-                bishop = (bishop & ~H_FILE) >> 7;
-                if(bishop == 0) break;
-                if(bishop & whitePieces) break;
-                movesWhiteBishop |= bishop;
-                if(bishop & blackPieces) break;
-            }
-            bishop = whiteBishop;
-            while(true){
-                bishop = (bishop & ~A_FILE) >> 9; // north-west
-                if(bishop == 0) break;
-                if(bishop & whitePieces) break;
-                movesWhiteBishop |= bishop;
-                if(bishop & blackPieces) break;
-            }
-        return movesWhiteBishop;
-    }
-
-    uint64_t generateMovesWhiteKnight() {
-        uint64_t moves = 0;
-        uint64_t knights = whiteKnight;
-        
-        while(knights) {
-            uint64_t knight = knights & -knights;
-            uint64_t possible = 0;
-            
-           
-            possible |= (knight << 17) & ~A_FILE;        // North-North-East
-            possible |= (knight << 15) & ~H_FILE;        // North-North-West
-            possible |= (knight << 10) & ~(A_FILE | B_FILE);  // North-East-East
-            possible |= (knight << 6) & ~(G_FILE | H_FILE);   // North-West-West
-            possible |= (knight >> 6) & ~(A_FILE | B_FILE);   // South-East-East
-            possible |= (knight >> 10) & ~(G_FILE | H_FILE);  // South-West-West
-            possible |= (knight >> 15) & ~A_FILE;        // South-South-East
-            possible |= (knight >> 17) & ~H_FILE;        // South-South-West
-            
-            possible &= ~whitePieces;
-            
-            moves |= possible;
-            knights &= knights - 1; 
-        }
-        return moves;
-    }
-
-    uint64_t generateMovesWhitePawn() {
-        uint64_t moves = 0;
-        uint64_t pawns = whitePawn;
-        
-        uint64_t singlePush = (pawns << 8) & ~(whitePieces | blackPieces);
-        
-        uint64_t doublePush = ((singlePush & RANK_3) << 8) & ~(whitePieces | blackPieces);
-        
-        uint64_t leftCapture = (pawns << 7) & blackPieces & ~H_FILE;
-        uint64_t rightCapture = (pawns << 9) & blackPieces & ~A_FILE;
-        
-        moves = singlePush | doublePush | leftCapture | rightCapture;
-        return moves;
     }
 
     void printGeneratedMoves(uint64_t moveList){
@@ -438,139 +234,342 @@ public:
             }
             cout << "\n";
     }
+    
+    uint64_t getAttackedSquares(bool byWhite) {
+        uint64_t attacked = 0;
+        for(int piece = 0; piece < 5; piece++) {
+            attacked |= generatePieceMoves(byWhite, piece);
+        }
+        return attacked;
+    }
 
-    void generateMoves(){
-        if(turn){ // generate for white
-            // psuedo-moves for white king
-            uint64_t movesWhiteKing = generateMovesWhiteKing();
-            uint64_t movesWhiteRook = generateMovesWhiteRook();
-            uint64_t movesWhiteQueen = generateMovesWhiteQueen();
-            uint64_t movesWhiteBishop = generateMovesWhiteBishop();
-            uint64_t movesWhiteKnight = generateMovesWhiteKnight();
-            uint64_t movesWhitePawn = generateMovesWhitePawn();
+    uint64_t generatePieceMoves(bool isWhite, int pieceType) {
+        uint64_t moves = 0;
+        uint64_t ownPieces = isWhite ? whitePieces : blackPieces;
+        uint64_t enemyPieces = isWhite ? blackPieces : whitePieces;
+        
+        switch(pieceType) {
+            case 0: { // Pawn
+                uint64_t pawns = isWhite ? whitePawn : blackPawn;
+                uint64_t empty = ~(whitePieces | blackPieces);
+            
+                if (isWhite) {
+                    uint64_t singlePush = (pawns >> 8) & empty;
+                    uint64_t doublePush = ((pawns & RANK_7) >> 8) & empty;
+                    doublePush = (doublePush >> 8) & empty;
+                    uint64_t leftCaptures = (pawns >> 9) & blackPieces & ~H_FILE; 
+                    uint64_t rightCaptures = (pawns >> 7) & blackPieces & ~A_FILE;
+                    moves = singlePush | doublePush | leftCaptures | rightCaptures;
+                    uint64_t promotions = (singlePush & RANK_8) | (leftCaptures & RANK_8) | (rightCaptures & RANK_8);
+                    moves |= promotions;
+                } else {
+                    uint64_t singlePush = (pawns << 8) & empty;
+                    uint64_t doublePush = ((pawns & RANK_2) << 8) & empty;
+                    doublePush = (doublePush << 8) & empty;
+                    uint64_t leftCaptures = (pawns << 9) & whitePieces & ~A_FILE; 
+                    uint64_t rightCaptures = (pawns << 7) & whitePieces & ~H_FILE; 
+                    moves = singlePush | doublePush | leftCaptures | rightCaptures;
+                    uint64_t promotions = (singlePush & RANK_1) | (leftCaptures & RANK_1) | (rightCaptures & RANK_1);
+                    moves |= promotions;
+                }
 
-        } else { // generate for black
+                break;
+            }            
+            case 1: { // Rook
+                uint64_t rooks = isWhite ? whiteRook : blackRook;
+                while(rooks) {
+                    uint64_t singleRook = rooks & -rooks;
+                    uint64_t rookMoves = 0;
+                    uint64_t shift;
+                    
+                    // North
+                    shift = singleRook;
+                    while((shift <<= 8) && !(shift & ownPieces)) {
+                        rookMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    // South
+                    shift = singleRook;
+                    while((shift >>= 8) && !(shift & ownPieces)) {
+                        rookMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    
+                    // East
+                    shift = singleRook;
+                    while((shift = (shift & ~H_FILE) << 1) && !(shift & ownPieces)) {
+                        rookMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    
+                    // West
+                    shift = singleRook;
+                    while((shift = (shift & ~A_FILE) >> 1) && !(shift & ownPieces)) {
+                        rookMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    moves = 0;
+                    moves |= rookMoves;
 
+                    int startSquare = __builtin_ctzll(singleRook);
+
+                    for(int i = 0; i < 64; i++){
+                        if(moves & (1ULL << i)) {
+                            if(startSquare == i) continue;
+                            moveList.push_back(encodeMove(isWhite, 4, startSquare, i));
+                        }
+                    }
+
+
+                    rooks &= rooks - 1;
+                }
+                break;
+            }
+            case 2: { // Bishop
+                uint64_t bishops = isWhite ? whiteBishop : blackBishop;
+                while(bishops) {
+                    uint64_t singleBishop = bishops & -bishops;
+                    uint64_t bishopMoves = 0;
+                    uint64_t shift;
+                    
+                    // NorthEast
+                    shift = singleBishop;
+                    while((shift = (shift & ~H_FILE) << 9) && !(shift & ownPieces)) {
+                        bishopMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    
+                    // NorthWest
+                    shift = singleBishop;
+                    while((shift = (shift & ~A_FILE) << 7) && !(shift & ownPieces)) {
+                        bishopMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    
+                    // SouthEast
+                    shift = singleBishop;
+                    while((shift = (shift & ~H_FILE) >> 7) && !(shift & ownPieces)) {
+                        bishopMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    
+                    // SouthWest
+                    shift = singleBishop;
+                    while((shift = (shift & ~A_FILE) >> 9) && !(shift & ownPieces)) {
+                        bishopMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    moves = 0;
+                    moves |= bishopMoves;
+
+                    int startSquare = __builtin_ctzll(singleBishop);
+
+                    for(int i = 0; i < 64; i++){
+                        if(moves & (1ULL << i)) {
+                            if(startSquare == i) continue;
+                            moveList.push_back(encodeMove(isWhite, 4, startSquare, i));
+                        }
+                    }
+
+                    bishops &= bishops - 1;
+                }
+                break;
+            }
+            case 3: { // Queen
+                uint64_t queens = isWhite ? whiteQueen : blackQueen;
+                while(queens) {
+                    uint64_t singleQueen = queens & -queens;
+                    uint64_t queenMoves = 0;
+                    uint64_t shift;
+                    // North
+                    shift = singleQueen;
+                    while((shift <<= 8) && !(shift & ownPieces)) {
+                        queenMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    // South
+                    shift = singleQueen;
+                    while((shift >>= 8) && !(shift & ownPieces)) {
+                        queenMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    // East
+                    shift = singleQueen;
+                    while((shift = (shift & ~H_FILE) << 1) && !(shift & ownPieces)) {
+                        queenMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    // West
+                    shift = singleQueen;
+                    while((shift = (shift & ~A_FILE) >> 1) && !(shift & ownPieces)) {
+                        queenMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    // NorthEast
+                    shift = singleQueen;
+                    while((shift = (shift & ~H_FILE) << 9) && !(shift & ownPieces)) {
+                        queenMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    // NorthWest
+                    shift = singleQueen;
+                    while((shift = (shift & ~A_FILE) << 7) && !(shift & ownPieces)) {
+                        queenMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    // SouthEast
+                    shift = singleQueen;
+                    while((shift = (shift & ~H_FILE) >> 7) && !(shift & ownPieces)) {
+                        queenMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+                    // SouthWest
+                    shift = singleQueen;
+                    while((shift = (shift & ~A_FILE) >> 9) && !(shift & ownPieces)) {
+                        queenMoves |= shift;
+                        if(shift & enemyPieces) break;
+                    }
+
+                    moves = 0;
+                    moves |= queenMoves;
+
+                    int startSquare = __builtin_ctzll(singleQueen);
+
+                    for(int i = 0; i < 64; i++){
+                        if(moves & (1ULL << i)) {
+                            if(startSquare == i) continue;
+                            moveList.push_back(encodeMove(isWhite, 3, startSquare, i));
+                        }
+                    }
+
+
+
+                    queens &= queens - 1;
+                }
+                break;
+            }
+            case 4: { // Knight
+                uint64_t knights = isWhite ? whiteKnight : blackKnight;
+                while(knights) {
+                    uint64_t knight = knights & -knights;
+                    uint64_t possible = 0;
+                    
+                    possible |= (knight << 17) & ~A_FILE;
+                    possible |= (knight << 15) & ~H_FILE;
+                    possible |= (knight << 10) & ~(A_FILE | B_FILE);
+                    possible |= (knight << 6) & ~(G_FILE | H_FILE);
+                    possible |= (knight >> 6) & ~(A_FILE | B_FILE);
+                    possible |= (knight >> 10) & ~(G_FILE | H_FILE);
+                    possible |= (knight >> 15) & ~A_FILE;
+                    possible |= (knight >> 17) & ~H_FILE;
+                    
+                    moves = 0;
+                    
+                    possible &= ~ownPieces;
+                    moves |= possible;
+
+                    int startSquare = __builtin_ctzll(knight);
+
+                    for(int i = 0; i < 64; i++){
+                        if(moves & (1ULL << i)) {
+                            if(startSquare == i) continue;
+                            moveList.push_back(encodeMove(isWhite, 4, startSquare, i));
+                        }
+                    }
+
+
+                    knights &= knights - 1;
+                }
+                break;
+            }
+            case 5: { // King
+                uint64_t king = isWhite ? whiteKing : blackKing;
+                uint64_t possible = 0;
+                uint64_t enemyAttacks = getAttackedSquares(!isWhite);
+
+                possible |= (king << 8) | (king >> 8);
+                possible |= (king << 1 & ~A_FILE) | (king >> 1 & ~H_FILE);
+                possible |= (king << 9 & ~A_FILE) | (king >> 7 & ~A_FILE);
+                possible |= (king << 7 & ~H_FILE) | (king >> 9 & ~H_FILE);
+                
+                moves = 0;
+
+                possible &= ~ownPieces;
+                possible &= ~enemyAttacks;
+                moves |= possible;
+                
+                int startSquare = __builtin_ctzll(king);
+
+                for(int i = 0; i < 64; i++){
+                    if(moves & (1ULL << i)) {
+                        if(startSquare == i) continue;
+                        moveList.push_back(encodeMove(isWhite, 5, startSquare, i));
+                    }
+                }
+                break;
+            }
+        }
+        return moves;
+    }
+
+    void generateMoves() {
+        for(int piece = 0; piece < 6; piece++) {
+            whiteLegalMoves |= generatePieceMoves(true, piece);
+            blackLegalMoves |= generatePieceMoves(false, piece);
+        }
+        // printGeneratedMoves((turn) ? whiteLegalMoves : blackLegalMoves);
+    }
+
+    uint16_t encodeMove(bool isWhite, int pieceType, int startSquare, int endSquare){
+        uint16_t move = 0;
+        move |= (isWhite ? 1 : 0) << 15;           // 1 bit for color
+        move |= (pieceType & 0b111) << 12;         // 3 bits for piece type
+        move |= (startSquare & 0b111111) << 6;     // 6 bits for starting square
+        move |= (endSquare & 0b111111);            // 6 bits for ending square
+        return move;
+    }
+
+    void decodeMove(uint16_t mv) {
+        color = (mv >> 15) & 1;
+        piece = (mv >> 12) & 0b111;
+        start = (mv >> 6) & 0b111111;
+        end = (mv) & 0b111111;
+        cout << "color: " << color << " piece " << piece << " start: " << start << " end: " << end << "\n";
+    } 
+
+    void getAllMoves(){
+        for(auto it: moveList) {
+            decodeMove(it);
         }
     }
 
-    void move(uint32_t mv){
-        /*
-            last bit -> Black or white
-            next 3 bits -> piece info
-            next 6 bits -> start square
-            next 6 bits -> end square
-        */
-        decodeMove(mv);
-        if(color) { // move white
-            switch (piece){
-                case 0:
-                    // move pawn
-                    whitePawn &= ~(1LL << start);
-                    whitePawn |= (1LL << end);
-                    break;
-                case 1:
-                    // move rook
-                    whiteRook &= ~(1LL << start);
-                    whiteRook |= (1LL << end);
-                    break;
-                case 2:
-                    // move knight
-                    whiteKnight &= ~(1LL << start);
-                    whiteKnight |= (1LL << end);
-                    break;
-                case 3:
-                    // move bishop
-                    whiteBishop &= ~(1LL << start);
-                    whiteBishop |= (1LL << end);
-                    break;
-                case 4: 
-                    // move queen
-                    whiteQueen &= ~(1LL << start);
-                    whiteQueen |= (1LL << end);
-                    break;
-                case 5:
-                    // move king
-                    whiteKing &= ~(1LL << start);
-                    whiteKing |= (1LL << end);
-                    break;
-            }
-        } else {
-            switch (piece){
-                case 0:
-                    // move pawn
-                    blackPawn &= ~(1LL << start);
-                    blackPawn |= (1LL << end);
-                    break;
-                case 1:
-                    // move rook
-                    blackRook &= ~(1LL << start);
-                    blackRook |= (1LL << end);
-                    break;
-                case 2:
-                    // move knight
-                    blackKnight &= ~(1LL << start);
-                    blackKnight |= (1LL << end);
-                    break;
-                case 3:
-                    // move bishop
-                    blackBishop &= ~(1LL << start);
-                    blackBishop |= (1LL << end);
-                    break;
-                case 4: 
-                    // move queen
-                    blackQueen &= ~(1LL << start);
-                    blackQueen |= (1LL << end);
-                    break;
-                case 5:
-                    // move king
-                    blackKing &= ~(1LL << start);
-                    blackKing |= (1LL << end);
-                    break;
-            }
 
-        }
-    }
+    // TODO: SEARCHING
 
-    uint32_t encodeMove(int color, int piece, int start, int end) {
-        uint32_t mv = 0;
-        mv |= (end & 63);         
-        mv <<= 6;                 
-        mv |= (start & 63);       
-        mv <<= 3;                 
-        mv |= (piece & 7);        
-        mv <<= 1;                 
-        mv |= (color & 1);        
-        return mv;
-    }
-    // uint32_t encodeMove(string mv){
-    //     uint32_t mv = 0;
-
-    // }
-    void decodeMove(uint32_t mv) {
-        color = mv & 1;           
-        mv >>= 1;                 
-        piece = mv & 7;           
-        mv >>= 3;                 
-        start = mv & 63;          
-        mv >>= 6;                 
-        end = mv & 63;            
-        cout << "color: " << color << " piece: " << piece << " start: " << start << " end: " << end << "\n";
-    }
+    
+    
 };
 
 int main() {
     Board b;
     // b.initializeGame();
-    // b.setupGame("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8");
-    b.setupGame("8/8/4p1Q1/8/3B4/8/4R3/4K3");
-    // b.setupGame("8/8/8/4K3/8/8/8/4Q3");
+    b.setupGame("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8");
+    // b.setupGame("8/8/8/8/8/5PP/5PQ/7P");
+    // b.setupGame("2p5/8/8/8/8/2P5/3B4/3K4");
     // b.setupGame("r3kb1r/ppp2p1p/5p2/3qp3/3N4/7P/PPPPKPP1/R1B4R");
-    b.generateMoves();
-    b.printGame();
-    b.evaluateBoard();
     // uint32_t mv = b.encodeMove(1, 0, 55, 39);
     // b.move(mv);
+    // mv = b.encodeMove(1, 0, 48, 40);
+    // b.move(mv);
+    // mv = b.encodeMove(1, 0, 49, 33);
+    // b.move(mv);
+    // mv = b.encodeMove(1, 0, 52, 44);
+    // b.move(mv);
+    // b.setupGame("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
+    b.generateMoves();
+    b.printGame();
+    b.getAllMoves();
+    // b.evaluateBoard();
     // b.printGame();
 
     return 0;
