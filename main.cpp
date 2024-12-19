@@ -2,9 +2,9 @@
 #include <vector>
 using namespace std;
 
-const uint64_t A_FILE = 0x0101010101010101ULL; // File A mask
-const uint64_t B_FILE = 0x0202020202020202ULL; // File B mask
-const uint64_t C_FILE = 0x0404040404040404ULL; // File C mask
+const uint64_t A_FILE = 0x0101010101010101ULL;
+const uint64_t B_FILE = 0x0202020202020202ULL;
+const uint64_t C_FILE = 0x0404040404040404ULL;
 const uint64_t D_FILE = 0x0808080808080808ULL;
 const uint64_t E_FILE = 0x1010101010101010ULL;
 const uint64_t F_FILE = 0x2020202020202020ULL;
@@ -118,10 +118,19 @@ class Board {
         return string(1, file) + string(1, rank);
     }
 
+    uint64_t getAttackedSquares(bool byWhite) {
+        uint64_t attacked = 0;
+        for(int piece = 0; piece < 5; piece++) {
+            attacked |= generatePieceMoves(byWhite, piece);
+        }
+        return attacked;
+    }
 
-
+    int tested = 0;
 public:
     vector<uint32_t> moveList;
+    uint32_t bestMove;
+
 
     void initializeGame() {
         blackQueen = (1LL << 3);
@@ -247,22 +256,6 @@ public:
         return score;
     }    
     
-    void printGeneratedMoves(uint64_t moveList){
-            for(int i = 1; i <= 64; i++){
-                cout << (((moveList) & (1LL << (i-1))) != 0) << " ";
-                if(i % 8 == 0) cout << "\n";
-            }
-            cout << "\n";
-    }
-    
-    uint64_t getAttackedSquares(bool byWhite) {
-        uint64_t attacked = 0;
-        for(int piece = 0; piece < 5; piece++) {
-            attacked |= generatePieceMoves(byWhite, piece);
-        }
-        return attacked;
-    }
-
     uint64_t generatePieceMoves(bool isWhite, int pieceType) {
         uint64_t moves = 0;
         uint64_t ownPieces = isWhite ? whitePieces : blackPieces;
@@ -556,17 +549,10 @@ public:
         // cout << color << " " << piece << " " << start << " " << end << " ";
     }
     
-    void getAllMoves(){
-        for(auto it: moveList) {
-            decodeMove(it);
-        }
-    }
-
-    int makeMove() {
-        int temp;
-        uint64_t oldPiece;
+    void makeMove() {
         uint64_t *currentPiece = nullptr;
     
+        // Identify the piece being moved based on its type and color
         switch (piece) {
             case 0: // Pawn
                 currentPiece = (!color ? &blackPawn : &whitePawn);
@@ -586,78 +572,64 @@ public:
             case 5: // King
                 currentPiece = (!color ? &blackKing : &whiteKing);
                 break;
+            default:
+                cout << "Invalid piece type!\n";
+                return;
         }
-        oldPiece = *currentPiece;
     
-        *currentPiece &= ~(1ULL << start);
-        *currentPiece |= (1ULL << end);
+        // Move the piece from the start square to the end square
+        *currentPiece &= ~(1ULL << start); // Remove from start
+        *currentPiece |= (1ULL << end);    // Add to end
     
-        uint64_t *attackedPiece = nullptr;
-    
-        if(blackPieces & (1ULL << end)) {
-            if(color) {
-                if(blackPawn & (1ULL << end)) attackedPiece = &blackPawn;
-                else if(blackRook & (1ULL << end)) attackedPiece = &blackRook;
-                else if(blackBishop & (1ULL << end)) attackedPiece = &blackBishop;
-                else if(blackKnight & (1ULL << end)) attackedPiece = &blackKnight;
-                else if(blackQueen & (1ULL << end)) attackedPiece = &blackQueen;
-                else if(blackKing & (1ULL << end)) attackedPiece = &blackKing;
+        // Handle captures
+        if(color) { // White is moving
+            if(blackPieces & (1ULL << end)) { // If there's a black piece at the destination
+                // Identify which black piece is captured and remove it
+                if(blackPawn & (1ULL << end)) blackPawn &= ~(1ULL << end);
+                else if(blackRook & (1ULL << end)) blackRook &= ~(1ULL << end);
+                else if(blackBishop & (1ULL << end)) blackBishop &= ~(1ULL << end);
+                else if(blackKnight & (1ULL << end)) blackKnight &= ~(1ULL << end);
+                else if(blackQueen & (1ULL << end)) blackQueen &= ~(1ULL << end);
+                else if(blackKing & (1ULL << end)) blackKing &= ~(1ULL << end);
             }
-        } else if(whitePieces & (1ULL << end)) {
-            if(!color) {
-                if(whitePawn & (1ULL << end)) attackedPiece = &whitePawn;
-                else if(whiteRook & (1ULL << end)) attackedPiece = &whiteRook;
-                else if(whiteBishop & (1ULL << end)) attackedPiece = &whiteBishop;
-                else if(whiteKnight & (1ULL << end)) attackedPiece = &whiteKnight;
-                else if(whiteQueen & (1ULL << end)) attackedPiece = &whiteQueen;
-                else if(whiteKing & (1ULL << end)) attackedPiece = &whiteKing;
+        } else { // Black is moving
+            if(whitePieces & (1ULL << end)) { // If there's a white piece at the destination
+                // Identify which white piece is captured and remove it
+                if(whitePawn & (1ULL << end)) whitePawn &= ~(1ULL << end);
+                else if(whiteRook & (1ULL << end)) whiteRook &= ~(1ULL << end);
+                else if(whiteBishop & (1ULL << end)) whiteBishop &= ~(1ULL << end);
+                else if(whiteKnight & (1ULL << end)) whiteKnight &= ~(1ULL << end);
+                else if(whiteQueen & (1ULL << end)) whiteQueen &= ~(1ULL << end);
+                else if(whiteKing & (1ULL << end)) whiteKing &= ~(1ULL << end);
             }
         }
     
-        uint64_t prevAttackPiece = 0;
-        if(attackedPiece != nullptr) {
-            prevAttackPiece = *attackedPiece;
-            *attackedPiece &= ~(1ULL << end);
-        }
-    
+        // Update the combined piece bitboards
         whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
         blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
-    
-        temp = testEvaluate();
-        // printGame();
-    
-        if(attackedPiece != nullptr) {
-            *attackedPiece = prevAttackPiece;
-        }
-        *currentPiece = oldPiece;
-    
-        whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
-        blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
-    
-        return temp;
     }
     
-    void test() {
-        int mx = -100000;
-        int count = 0;
-        uint32_t bestMv = 0;
-        for(auto it: moveList) {
-            decodeMove(it);
-            if(color) {
-                int temp = makeMove();
-                count++;
-                if(temp > mx) {
-                    bestMv = it;
-                    mx = temp;
-                }
-            }
-        }
-        cout << "Moves tested: " << count << "\n";
-        cout << "----Best  Move----\n";
-        printGame();
-        decodeMove(bestMv);
-        cout << color << " " << piece << " " << indexToAlgebraic(start) << "->" << indexToAlgebraic(end) << "\n";
-    }
+    // void test() {
+    //     int mx = -100000;
+    //     int count = 0;
+    //     uint32_t bestMv = 0;
+    //     for(auto it: moveList) {
+    //         decodeMove(it);
+    //         if(color) {
+    //             int temp = makeMove();
+    //             count++;
+    //             if(temp > mx) {
+    //                 bestMv = it;
+    //                 mx = temp;
+    //             }
+    //         }
+    //     }
+    //     cout << "Moves tested: " << count << "\n";
+    //     cout << "----Best  Move----\n";
+    //     printGame();
+    //     decodeMove(bestMv);
+    //     cout << color << " " << piece << " " << indexToAlgebraic(start) << "->" << indexToAlgebraic(end) << "\n";
+    // }
 
     int testEvaluate() {
         int score = 0;
@@ -766,51 +738,92 @@ public:
 
 // final search implementation 
 
-int search(int depth, bool isWhite) {
-    if (depth == 0) 
-        return evaluateBoard(); // Base case: evaluate board at leaf nodes.
+    int search(int depth, bool isWhite) {
+        if (depth == 0) {
+            tested++;
+            return testEvaluate();
+        }
 
-    int best = isWhite ? -100000 : 100000; // Initialize best score for max or min player.
-    vector<uint64_t> moves = isWhite ? generateWhiteMoves() : generateBlackMoves();
+        moveList.clear();
+        for(int piece = 0; piece < 6; piece++) {
+            generatePieceMoves(isWhite, piece);
+        }
 
-    for (uint64_t mv : moves) {
-        // Save the current state of the board (bitboards, etc.)
-        uint64_t oldWhitePieces = whitePieces;
-        uint64_t oldBlackPieces = blackPieces;
+        if (moveList.empty()) {
+            return isWhite ? -99999 : 99999;  // No moves available
+        }
 
-        uint64_t oldKingPosition = isWhite ? whiteKing : blackKing;
-        uint64_t oldQueenPosition = isWhite ? whiteQueen : blackQueen;
-        uint64_t oldRookPosition = isWhite ? whiteRook : blackRook;
-        uint64_t oldKnightPosition = isWhite ? whiteKnight : blackKnight;
-        uint64_t oldBishopPosition = isWhite ? whiteBishop : blackBishop;
-        uint64_t oldPawnPosition = isWhite ? whitePawn : blackPawn;
-        
+        int bestScore = isWhite ? -100000 : 100000;
+        vector<uint32_t> currentMoves = moveList;  // Save current moves
 
-        makeMove(mv); // Apply the move.
+        for (auto mv : currentMoves) {
+            // Save board state
+            uint64_t oldWhitePawn = whitePawn;
+            uint64_t oldWhiteKnight = whiteKnight;
+            uint64_t oldWhiteBishop = whiteBishop;
+            uint64_t oldWhiteRook = whiteRook;
+            uint64_t oldWhiteQueen = whiteQueen;
+            uint64_t oldWhiteKing = whiteKing;
+            uint64_t oldBlackPawn = blackPawn;
+            uint64_t oldBlackKnight = blackKnight;
+            uint64_t oldBlackBishop = blackBishop;
+            uint64_t oldBlackRook = blackRook;
+            uint64_t oldBlackQueen = blackQueen;
+            uint64_t oldBlackKing = blackKing;
+            uint64_t oldWhitePieces = whitePieces;
+            uint64_t oldBlackPieces = blackPieces;
 
-        int score = search(depth - 1, !isWhite); // Recursive call.
+            decodeMove(mv);
+            makeMove();
+            
+            int score = search(depth - 1, !isWhite);
 
-        whitePieces = oldWhitePieces;
-        blackPieces = oldBlackPieces;
-        if (isWhite) whiteKing = oldKingPosition;
-        else blackKing = oldKingPosition;
+            // Restore board state
+            whitePawn = oldWhitePawn;
+            whiteKnight = oldWhiteKnight;
+            whiteBishop = oldWhiteBishop;
+            whiteRook = oldWhiteRook;
+            whiteQueen = oldWhiteQueen;
+            whiteKing = oldWhiteKing;
+            blackPawn = oldBlackPawn;
+            blackKnight = oldBlackKnight;
+            blackBishop = oldBlackBishop;
+            blackRook = oldBlackRook;
+            blackQueen = oldBlackQueen;
+            blackKing = oldBlackKing;
+            whitePieces = oldWhitePieces;
+            blackPieces = oldBlackPieces;
 
-        if (isWhite) {
-            if (score > best) {
-                best = score;
-                bestMv = mv; // Save the best move for White.
-            }
-        } else {
-            if (score < best) {
-                best = score;
-                bestMv = mv; // Save the best move for Black.
+            if (isWhite) {
+                if (score > bestScore) {
+                    bestScore = score;
+                    if (depth == 4) bestMove = mv;
+                }
+            } else {
+                if (score < bestScore) {
+                    bestScore = score;
+                    if (depth == 4) bestMove = mv;
+                }
             }
         }
+
+        moveList = currentMoves;  // Restore moves list
+        return bestScore;
     }
 
-    return best;
-}
-
+    void testSearch() {
+        moveList.clear();
+        int score = search(4, true);
+        cout << "Search completed\n";
+        cout << "Best move score: " << score << "\n";
+        if (bestMove != 0) {
+            decodeMove(bestMove);
+            cout << "Best move: " << indexToAlgebraic(start) << "->" << indexToAlgebraic(end) << "\n";
+        } else {
+            cout << "No valid move found\n";
+        }
+        cout << "Positions evaluated: " << tested << "\n";
+    }
 
 
 };
@@ -820,20 +833,20 @@ int main() {
     cout << "\n";
     // b.initializeGame();
     // b.setupGame("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8");
-    b.setupGame("6r/8/8/8/8/8/7K/6q");
+    // b.setupGame("6r/8/8/8/8/8/7K/6q");
     // b.setupGame("6r/8/8/8/8/8/8/6K");
-    // b.setupGame("1r3B1n/p5K/3Q/1k/3pP3/8/1P3P1q/R6");
+    // b.setupGame("r3RB1n/p5K/3Q/1k/3pP3/8/1P3P1q/8");
     // b.setupGame("r3kb1r/2p1pppp/p4nb1/3p2B1/1q4P1/2NP1N1P/PPP1QP2/R3K2R");
     // b.setupGame("2p5/8/8/8/8/2P5/3B4/3K4");
-    // b.setupGame("r3kb1r/ppp2p1p/5p2/3qp3/3N4/7P/PPPPKPP1/R1B4R");
-    // b.setupGame("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
-
-    b.generateMoves();
-    // b.printGame();
-    b.test();
+    b.setupGame("r3kb1r/ppp2p1p/5p2/3qp3/3N4/7P/PPPPKPP1/R1B4R");
+    // b.setupGame("r1bqkb1r/pppppppp/2n2n2/8/3P4/2N2N2/PPP1PPPP/R1BQKB1R");
+    // b.generateMoves();
+    b.printGame();
+    // b.test();
     // cout << b.evaluateBoard() << "\n"; 
-    cout << b.testEvaluate() << "\n";
+    // cout << b.testEvaluate() << "\n";
     // b.printGame();
+    b.testSearch();
 
     return 0;
 }
