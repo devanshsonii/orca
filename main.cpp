@@ -2,14 +2,14 @@
 #include <vector>
 using namespace std;
 
-const uint64_t A_FILE = 0x0101010101010101;
-const uint64_t B_FILE = 0x0202020202020202;
-const uint64_t C_FILE = 0x0303030303030303;
-const uint64_t D_FILE = 0x0404040404040404;
-const uint64_t E_FILE = 0x0505050505050505;
-const uint64_t F_FILE = 0x0606060606060606;
-const uint64_t G_FILE = 0x0707070707070707;
-const uint64_t H_FILE = 0x8080808080808080;
+const uint64_t A_FILE = 0x0101010101010101ULL; // File A mask
+const uint64_t B_FILE = 0x0202020202020202ULL; // File B mask
+const uint64_t C_FILE = 0x0404040404040404ULL; // File C mask
+const uint64_t D_FILE = 0x0808080808080808ULL;
+const uint64_t E_FILE = 0x1010101010101010ULL;
+const uint64_t F_FILE = 0x2020202020202020ULL;
+const uint64_t G_FILE = 0x4040404040404040ULL;
+const uint64_t H_FILE = 0x8080808080808080ULL;
 
 const uint64_t RANK_1 = 0x00000000000000FF;
 const uint64_t RANK_2 = 0x000000000000FF00;
@@ -83,6 +83,7 @@ class Board {
         -5,  0,  0,  0,  0,  0,  0, -5,
         0,  0,  0,  5,  5,  0,  0,  0
     };
+    
     int white_queen[64] = {
         -20,-10,-10, -5, -5,-10,-10,-20,
         -10,  0,  0,  0,  0,  0,  0,-10,
@@ -109,6 +110,15 @@ class Board {
     int color = 0, piece = 0, start = 0, end = 0;
     uint64_t whiteLegalMoves = 0;
     uint64_t blackLegalMoves = 0;
+
+    string indexToAlgebraic(int index) {
+        if(index < 0 || index > 63) return "??";
+        char file = 'a' + (index % 8);
+        char rank = '1' + (index / 8);
+        return string(1, file) + string(1, rank);
+    }
+
+
 
 public:
     vector<uint32_t> moveList;
@@ -146,23 +156,23 @@ public:
             for(int j = 0; j < 8; j++){
                 int mask = i*8 + j;
                 string piece = ".";
-                if((blackQueen >> mask) & 1) piece = "♛";
-                else if((blackPawn >> mask) & 1) piece = "♟";
-                else if((blackBishop >> mask) & 1) piece = "♝";
-                else if((blackKing >> mask) & 1) piece = "♚";
-                else if((blackRook >> mask) & 1) piece = "♜";
-                else if((blackKnight >> mask) & 1) piece = "♞";
+                if((whiteQueen >> mask) & 1) piece = "♛";
+                else if((whitePawn >> mask) & 1) piece = "♟";
+                else if((whiteBishop >> mask) & 1) piece = "♝";
+                else if((whiteKing >> mask) & 1) piece = "♚";
+                else if((whiteRook >> mask) & 1) piece = "♜";
+                else if((whiteKnight >> mask) & 1) piece = "♞";
 
-                else if((whiteQueen >> mask) & 1) piece = "♕";
-                else if((whitePawn >> mask) & 1) piece = "♙";
-                else if((whiteBishop >> mask) & 1) piece = "♗";
-                else if((whiteKing >> mask) & 1) piece = "♔";
-                else if((whiteRook >> mask) & 1) piece = "♖";
-                else if((whiteKnight >> mask) & 1) piece = "♘";
+                else if((blackQueen >> mask) & 1) piece = "♕";
+                else if((blackPawn >> mask) & 1) piece = "♙";
+                else if((blackBishop >> mask) & 1) piece = "♗";
+                else if((blackKing >> mask) & 1) piece = "♔";
+                else if((blackRook >> mask) & 1) piece = "♖";
+                else if((blackKnight >> mask) & 1) piece = "♘";
 
-                if((whiteLegalMoves >> mask) & 1) {
-                    piece = "_";
-                };
+                // if((whiteLegalMoves >> mask) & 1) {
+                //     piece = "_";
+                // };
                 cout << piece << " ";
             }
             cout << "\n";
@@ -201,7 +211,7 @@ public:
         blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
     }
 
-    void evaluateBoard(){
+    int evaluateBoard(){
         int score = 0;
         for(int file = 0; file < 8; file++){
             for(int rank = 0; rank < 8; rank++){
@@ -220,11 +230,12 @@ public:
                 else if((whiteRook >> mask) & 1) score += 5 + white_rook[mask];
                 else if((whiteKnight >> mask) & 1) score += 3 + white_knight[mask];
 
-                if(whiteKing & blackLegalMoves) score -= 1000;
-                if(blackKing & whiteLegalMoves) score += 1000;
+                // if(whiteKing & blackLegalMoves) score -= 1000;
+                // if(blackKing & whiteLegalMoves) score += 1000;
             }
         }
-        cout << score << "\n";
+        // cout << score << "\n";
+        return score;
     }
 
     void printGeneratedMoves(uint64_t moveList){
@@ -316,7 +327,7 @@ public:
                     for(int i = 0; i < 64; i++){
                         if(moves & (1ULL << i)) {
                             if(startSquare == i) continue;
-                            moveList.push_back(encodeMove(isWhite, 4, startSquare, i));
+                            moveList.push_back(encodeMove(isWhite, 1, startSquare, i));
                         }
                     }
 
@@ -367,7 +378,7 @@ public:
                     for(int i = 0; i < 64; i++){
                         if(moves & (1ULL << i)) {
                             if(startSquare == i) continue;
-                            moveList.push_back(encodeMove(isWhite, 4, startSquare, i));
+                            moveList.push_back(encodeMove(isWhite, 2, startSquare, i));
                         }
                     }
 
@@ -441,8 +452,6 @@ public:
                             moveList.push_back(encodeMove(isWhite, 3, startSquare, i));
                         }
                     }
-
-
 
                     queens &= queens - 1;
                 }
@@ -534,42 +543,91 @@ public:
         piece = (mv >> 12) & 0b111;
         start = (mv >> 6) & 0b111111;
         end = (mv) & 0b111111;
-        cout << "color: " << color << " piece " << piece << " start: " << start << " end: " << end << "\n";
-    } 
-
+        
+        // cout << color << " " << piece << " " << start << " " << end << " ";
+    }
+    
     void getAllMoves(){
         for(auto it: moveList) {
             decodeMove(it);
         }
     }
 
+    int makeMove() {
+        int temp;
+        uint64_t oldPiece;
+        uint64_t *currentPiece = nullptr;
 
-    // TODO: SEARCHING
+        switch (piece) {
+            case 0: // Pawn
+                currentPiece = (!color ? &blackPawn : &whitePawn);
+                break;
+            case 1: // Rook
+                currentPiece = (!color ? &blackRook : &whiteRook);
+                break;
+            case 2: // Bishop
+                currentPiece = (!color ? &blackBishop : &whiteBishop);
+                break;
+            case 3: // Queen
+                currentPiece = (!color ? &blackQueen : &whiteQueen);
+                break;
+            case 4: // Knight
+                currentPiece = (!color ? &blackKnight : &whiteKnight);
+                break;
+            case 5: // King
+                currentPiece = (!color ? &blackKing : &whiteKing);
+                break;
+        }
+        oldPiece = *currentPiece;
 
+        *currentPiece &= ~(1ULL << start);
+        *currentPiece |= (1ULL << end);
+
+        whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
+        blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
+
+        temp = evaluateBoard();
+        printGame();
+
+        *currentPiece = oldPiece;
+
+        return temp;
+
+    }
     
+    void test() {
+        int mx = -100000;
+        uint32_t bestMv = 0;
+        for(auto it: moveList) {
+
+            decodeMove(it);
+            if(color) {
+                int temp = makeMove();
+                if(temp > mx) {
+                    bestMv = it;
+                    mx = temp;
+                }
+            }
+        }
+        printGame();
+        decodeMove(bestMv);
+        cout << color << " " << piece << " " << start << " " << end << " " << mx << "\n";
+    }
     
 };
 
 int main() {
     Board b;
     // b.initializeGame();
-    b.setupGame("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8");
-    // b.setupGame("8/8/8/8/8/5PP/5PQ/7P");
+    // b.setupGame("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8");
+    b.setupGame("5R/7K/8/8/8/8/8/5q");
     // b.setupGame("2p5/8/8/8/8/2P5/3B4/3K4");
     // b.setupGame("r3kb1r/ppp2p1p/5p2/3qp3/3N4/7P/PPPPKPP1/R1B4R");
-    // uint32_t mv = b.encodeMove(1, 0, 55, 39);
-    // b.move(mv);
-    // mv = b.encodeMove(1, 0, 48, 40);
-    // b.move(mv);
-    // mv = b.encodeMove(1, 0, 49, 33);
-    // b.move(mv);
-    // mv = b.encodeMove(1, 0, 52, 44);
-    // b.move(mv);
     // b.setupGame("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
     b.generateMoves();
     b.printGame();
-    b.getAllMoves();
-    // b.evaluateBoard();
+    b.evaluateBoard();
+    b.test();
     // b.printGame();
 
     return 0;
