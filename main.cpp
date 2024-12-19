@@ -114,7 +114,7 @@ class Board {
     string indexToAlgebraic(int index) {
         if(index < 0 || index > 63) return "??";
         char file = 'a' + (index % 8);
-        char rank = '1' + (index / 8);
+        char rank = '1' + 7-(index / 8);
         return string(1, file) + string(1, rank);
     }
 
@@ -211,33 +211,42 @@ public:
         blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
     }
 
-    int evaluateBoard(){
+    int evaluateBoard() {
         int score = 0;
-        for(int file = 0; file < 8; file++){
-            for(int rank = 0; rank < 8; rank++){
-                int mask = file*8 + rank;
-                if((blackQueen >> mask) & 1) score -= 9 + white_queen[63-mask];
-                else if((blackPawn >> mask) & 1) score -= 1 + white_pawn[63-mask];
-                else if((blackBishop >> mask) & 1) score -= 3 + white_bishop[63-mask];
-                else if((blackKing >> mask) & 1) score -= white_king[63-mask];
-                else if((blackRook >> mask) & 1) score -= 5 + white_rook[63-mask];
-                else if((blackKnight >> mask) & 1) score -= 3 + white_knight[63-mask];
-
-                else if((whiteQueen >> mask) & 1) score += 9 + white_queen[mask];
-                else if((whitePawn >> mask) & 1) score += 1 + white_pawn[mask];
-                else if((whiteBishop >> mask) & 1) score += 3 + white_bishop[mask];
-                else if((whiteKing >> mask) & 1) score += white_king[mask];
-                else if((whiteRook >> mask) & 1) score += 5 + white_rook[mask];
-                else if((whiteKnight >> mask) & 1) score += 3 + white_knight[mask];
-
-                // if(whiteKing & blackLegalMoves) score -= 1000;
-                // if(blackKing & whiteLegalMoves) score += 1000;
+        for (int rank = 0; rank < 8; rank++) {
+            for (int file = 0; file < 8; file++) {
+                int square = (7 - rank) * 8 + file;
+                int mirrorSquare = square ^ 56;
+    
+                if (whitePawn & (1ULL << square))
+                    score += 1 + white_pawn[square];
+                else if (whiteKnight & (1ULL << square))
+                    score += 3 + white_knight[square];
+                else if (whiteBishop & (1ULL << square))
+                    score += 3 + white_bishop[square];
+                else if (whiteRook & (1ULL << square))
+                    score += 5 + white_rook[square];
+                else if (whiteQueen & (1ULL << square))
+                    score += 9 + white_queen[square];
+                else if (whiteKing & (1ULL << square))
+                    score += white_king[square];
+                else if (blackPawn & (1ULL << square))
+                    score -= 1 + white_pawn[mirrorSquare];
+                else if (blackKnight & (1ULL << square))
+                    score -= 3 + white_knight[mirrorSquare];
+                else if (blackBishop & (1ULL << square))
+                    score -= 3 + white_bishop[mirrorSquare];
+                else if (blackRook & (1ULL << square))
+                    score -= 5 + white_rook[mirrorSquare];
+                else if (blackQueen & (1ULL << square))
+                    score -= 9 + white_queen[mirrorSquare];
+                else if (blackKing & (1ULL << square))
+                    score -= white_king[mirrorSquare];
             }
         }
-        // cout << score << "\n";
         return score;
-    }
-
+    }    
+    
     void printGeneratedMoves(uint64_t moveList){
             for(int i = 1; i <= 64; i++){
                 cout << (((moveList) & (1LL << (i-1))) != 0) << " ";
@@ -557,7 +566,7 @@ public:
         int temp;
         uint64_t oldPiece;
         uint64_t *currentPiece = nullptr;
-
+    
         switch (piece) {
             case 0: // Pawn
                 currentPiece = (!color ? &blackPawn : &whitePawn);
@@ -579,55 +588,251 @@ public:
                 break;
         }
         oldPiece = *currentPiece;
-
+    
         *currentPiece &= ~(1ULL << start);
         *currentPiece |= (1ULL << end);
-
+    
+        uint64_t *attackedPiece = nullptr;
+    
+        if(blackPieces & (1ULL << end)) {
+            if(color) {
+                if(blackPawn & (1ULL << end)) attackedPiece = &blackPawn;
+                else if(blackRook & (1ULL << end)) attackedPiece = &blackRook;
+                else if(blackBishop & (1ULL << end)) attackedPiece = &blackBishop;
+                else if(blackKnight & (1ULL << end)) attackedPiece = &blackKnight;
+                else if(blackQueen & (1ULL << end)) attackedPiece = &blackQueen;
+                else if(blackKing & (1ULL << end)) attackedPiece = &blackKing;
+            }
+        } else if(whitePieces & (1ULL << end)) {
+            if(!color) {
+                if(whitePawn & (1ULL << end)) attackedPiece = &whitePawn;
+                else if(whiteRook & (1ULL << end)) attackedPiece = &whiteRook;
+                else if(whiteBishop & (1ULL << end)) attackedPiece = &whiteBishop;
+                else if(whiteKnight & (1ULL << end)) attackedPiece = &whiteKnight;
+                else if(whiteQueen & (1ULL << end)) attackedPiece = &whiteQueen;
+                else if(whiteKing & (1ULL << end)) attackedPiece = &whiteKing;
+            }
+        }
+    
+        uint64_t prevAttackPiece = 0;
+        if(attackedPiece != nullptr) {
+            prevAttackPiece = *attackedPiece;
+            *attackedPiece &= ~(1ULL << end);
+        }
+    
         whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
         blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
-
-        temp = evaluateBoard();
-        printGame();
-
+    
+        temp = testEvaluate();
+        // printGame();
+    
+        if(attackedPiece != nullptr) {
+            *attackedPiece = prevAttackPiece;
+        }
         *currentPiece = oldPiece;
-
+    
+        whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
+        blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
+    
         return temp;
-
     }
     
     void test() {
         int mx = -100000;
+        int count = 0;
         uint32_t bestMv = 0;
         for(auto it: moveList) {
-
             decodeMove(it);
             if(color) {
                 int temp = makeMove();
+                count++;
                 if(temp > mx) {
                     bestMv = it;
                     mx = temp;
                 }
             }
         }
+        cout << "Moves tested: " << count << "\n";
+        cout << "----Best  Move----\n";
         printGame();
         decodeMove(bestMv);
-        cout << color << " " << piece << " " << start << " " << end << " " << mx << "\n";
+        cout << color << " " << piece << " " << indexToAlgebraic(start) << "->" << indexToAlgebraic(end) << "\n";
     }
-    
+
+    int testEvaluate() {
+        int score = 0;
+        // Piece values
+        const int pawnValue = 100;
+        const int knightValue = 300;
+        const int bishopValue = 300;
+        const int rookValue = 500;
+        const int queenValue = 900;
+
+        // Helper lambda to calculate piece-square table index
+        auto pieceSquareIndex = [](bool isWhite, int square) {
+            return isWhite ? square : 63 - square;
+        };
+
+        // Material and positional evaluation
+        uint64_t bitboard;
+
+        // Pawns
+        bitboard = whitePawn;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score += pawnValue + white_pawn[pieceSquareIndex(true, square)];
+            bitboard &= bitboard - 1; // Remove least significant bit
+        }
+        bitboard = blackPawn;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score -= pawnValue + white_pawn[pieceSquareIndex(false, square)];
+            bitboard &= bitboard - 1;
+        }
+
+        // Knights
+        bitboard = whiteKnight;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score += knightValue + white_knight[pieceSquareIndex(true, square)];
+            bitboard &= bitboard - 1;
+        }
+        bitboard = blackKnight;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score -= knightValue + white_knight[pieceSquareIndex(false, square)];
+            bitboard &= bitboard - 1;
+        }
+
+        // Bishops
+        bitboard = whiteBishop;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score += bishopValue + white_bishop[pieceSquareIndex(true, square)];
+            bitboard &= bitboard - 1;
+        }
+        bitboard = blackBishop;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score -= bishopValue + white_bishop[pieceSquareIndex(false, square)];
+            bitboard &= bitboard - 1;
+        }
+
+        // Rooks
+        bitboard = whiteRook;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score += rookValue + white_rook[pieceSquareIndex(true, square)];
+            bitboard &= bitboard - 1;
+        }
+        bitboard = blackRook;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score -= rookValue + white_rook[pieceSquareIndex(false, square)];
+            bitboard &= bitboard - 1;
+        }
+
+        // Queens
+        bitboard = whiteQueen;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score += queenValue + white_queen[pieceSquareIndex(true, square)];
+            bitboard &= bitboard - 1;
+        }
+        bitboard = blackQueen;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score -= queenValue + white_queen[pieceSquareIndex(false, square)];
+            bitboard &= bitboard - 1;
+        }
+
+        // Kings
+        bitboard = whiteKing;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score += white_king[pieceSquareIndex(true, square)];
+            bitboard &= bitboard - 1;
+        }
+        bitboard = blackKing;
+        while (bitboard) {
+            int square = __builtin_ctzll(bitboard);
+            score -= white_king[pieceSquareIndex(false, square)];
+            bitboard &= bitboard - 1;
+        }
+
+        return score;
+    }
+
+
+// final search implementation 
+
+int search(int depth, bool isWhite) {
+    if (depth == 0) 
+        return evaluateBoard(); // Base case: evaluate board at leaf nodes.
+
+    int best = isWhite ? -100000 : 100000; // Initialize best score for max or min player.
+    vector<uint64_t> moves = isWhite ? generateWhiteMoves() : generateBlackMoves();
+
+    for (uint64_t mv : moves) {
+        // Save the current state of the board (bitboards, etc.)
+        uint64_t oldWhitePieces = whitePieces;
+        uint64_t oldBlackPieces = blackPieces;
+
+        uint64_t oldKingPosition = isWhite ? whiteKing : blackKing;
+        uint64_t oldQueenPosition = isWhite ? whiteQueen : blackQueen;
+        uint64_t oldRookPosition = isWhite ? whiteRook : blackRook;
+        uint64_t oldKnightPosition = isWhite ? whiteKnight : blackKnight;
+        uint64_t oldBishopPosition = isWhite ? whiteBishop : blackBishop;
+        uint64_t oldPawnPosition = isWhite ? whitePawn : blackPawn;
+        
+
+        makeMove(mv); // Apply the move.
+
+        int score = search(depth - 1, !isWhite); // Recursive call.
+
+        whitePieces = oldWhitePieces;
+        blackPieces = oldBlackPieces;
+        if (isWhite) whiteKing = oldKingPosition;
+        else blackKing = oldKingPosition;
+
+        if (isWhite) {
+            if (score > best) {
+                best = score;
+                bestMv = mv; // Save the best move for White.
+            }
+        } else {
+            if (score < best) {
+                best = score;
+                bestMv = mv; // Save the best move for Black.
+            }
+        }
+    }
+
+    return best;
+}
+
+
+
 };
 
 int main() {
     Board b;
+    cout << "\n";
     // b.initializeGame();
     // b.setupGame("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8");
-    b.setupGame("5R/7K/8/8/8/8/8/5q");
+    b.setupGame("6r/8/8/8/8/8/7K/6q");
+    // b.setupGame("6r/8/8/8/8/8/8/6K");
+    // b.setupGame("1r3B1n/p5K/3Q/1k/3pP3/8/1P3P1q/R6");
+    // b.setupGame("r3kb1r/2p1pppp/p4nb1/3p2B1/1q4P1/2NP1N1P/PPP1QP2/R3K2R");
     // b.setupGame("2p5/8/8/8/8/2P5/3B4/3K4");
     // b.setupGame("r3kb1r/ppp2p1p/5p2/3qp3/3N4/7P/PPPPKPP1/R1B4R");
     // b.setupGame("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
+
     b.generateMoves();
-    b.printGame();
-    b.evaluateBoard();
+    // b.printGame();
     b.test();
+    // cout << b.evaluateBoard() << "\n"; 
+    cout << b.testEvaluate() << "\n";
     // b.printGame();
 
     return 0;
