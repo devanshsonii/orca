@@ -1,15 +1,30 @@
+/*
+    parts of a chess engine:
+        -> Board representation
+        -> Move generation
+            -> Color-wise move generation not working
+        -> Move validation
+        -> Make move
+            -> A function to make/unmake move
+            -> Create save/restore BB
+        -> Board evaluation
+            -> Checks aren't working
+        -> Searching
+*/
+
+
 #include <iostream> 
 #include <vector>
 using namespace std;
 
-const uint64_t A_FILE = 0x0101010101010101ULL;
-const uint64_t B_FILE = 0x0202020202020202ULL;
-const uint64_t C_FILE = 0x0404040404040404ULL;
-const uint64_t D_FILE = 0x0808080808080808ULL;
-const uint64_t E_FILE = 0x1010101010101010ULL;
-const uint64_t F_FILE = 0x2020202020202020ULL;
-const uint64_t G_FILE = 0x4040404040404040ULL;
-const uint64_t H_FILE = 0x8080808080808080ULL;
+const uint64_t A_FILE = 0x0101010101010101;
+const uint64_t B_FILE = 0x0202020202020202;
+const uint64_t C_FILE = 0x0404040404040404;
+const uint64_t D_FILE = 0x0808080808080808;
+const uint64_t E_FILE = 0x1010101010101010;
+const uint64_t F_FILE = 0x2020202020202020;
+const uint64_t G_FILE = 0x4040404040404040;
+const uint64_t H_FILE = 0x8080808080808080;
 
 const uint64_t RANK_1 = 0x00000000000000FF;
 const uint64_t RANK_2 = 0x000000000000FF00;
@@ -20,7 +35,18 @@ const uint64_t RANK_6 = 0x0000FF0000000000;
 const uint64_t RANK_7 = 0x00FF000000000000;
 const uint64_t RANK_8 = 0xFF00000000000000;
 
+int initialDepth;
 
+class Move {
+public:
+    int color, piece, startSquare, endSquare;
+    Move(uint32_t m) {
+        color = (m >> 15) & 1;
+        piece = (m >> 12) & 0b111;
+        startSquare = (m >> 6) & 0b111111;
+        endSquare = (m) & 0b111111;
+    }
+};
 
 class Board { 
     // white-centric
@@ -40,7 +66,7 @@ class Board {
     uint64_t blackQueen = 0;
     uint64_t blackPieces = 0;
     
-    int white_knight[64] = {
+    int knight_pref[64] = {
         -50,-40,-30,-30,-30,-30,-40,-50,
         -40,-20,  0,  0,  0,  0,-20,-40,
         -30,  0, 10, 15, 15, 10,  0,-30,
@@ -51,7 +77,7 @@ class Board {
         -50,-40,-30,-30,-30,-30,-40,-50
     };
 
-    int white_pawn[64] = {
+    int pawn_pref[64] = {
         0,  0,  0,  0,  0,  0,  0,  0,
         50, 50, 50, 50, 50, 50, 50, 50,
         10, 10, 20, 30, 30, 20, 10, 10,
@@ -62,7 +88,7 @@ class Board {
         0,  0,  0,  0,  0,  0,  0,  0
     };
 
-    int white_bishop[64] = {
+    int bishop_pref[64] = {
         -20,-10,-10,-10,-10,-10,-10,-20,
         -10,  0,  0,  0,  0,  0,  0,-10,
         -10,  0,  5, 10, 10,  5,  0,-10,
@@ -73,7 +99,7 @@ class Board {
         -20,-10,-10,-10,-10,-10,-10,-20
     };
 
-    int white_rook[64] = {
+    int rook_pref[64] = {
         0,  0,  0,  0,  0,  0,  0,  0,
         5, 10, 10, 10, 10, 10, 10,  5,
         -5,  0,  0,  0,  0,  0,  0, -5,
@@ -84,7 +110,7 @@ class Board {
         0,  0,  0,  5,  5,  0,  0,  0
     };
     
-    int white_queen[64] = {
+    int queen_pref[64] = {
         -20,-10,-10, -5, -5,-10,-10,-20,
         -10,  0,  0,  0,  0,  0,  0,-10,
         -10,  0,  5,  5,  5,  5,  0,-10,
@@ -95,7 +121,7 @@ class Board {
         -20,-10,-10, -5, -5,-10,-10,-20
     };
     
-    int white_king[64] = {
+    int king_pref[64] = {
         -20,-10,-10, -5, -5,-10,-10,-20,
         -10,  0,  0,  0,  0,  0,  0,-10,
         -10,  0,  5,  5,  5,  5,  0,-10,
@@ -108,6 +134,8 @@ class Board {
 
     bool turn = true; // true = white, false = black;
     int color = 0, piece = 0, start = 0, end = 0;
+    int tested = 0; 
+
     uint64_t whiteLegalMoves = 0;
     uint64_t blackLegalMoves = 0;
 
@@ -118,6 +146,7 @@ class Board {
         return string(1, file) + string(1, rank);
     }
 
+    // rewrite this
     uint64_t getAttackedSquares(bool byWhite) {
         uint64_t attacked = 0;
         for(int piece = 0; piece < 5; piece++) {
@@ -126,39 +155,11 @@ class Board {
         return attacked;
     }
 
-    int tested = 0;
 public:
     vector<uint32_t> moveList;
     uint32_t bestMove;
 
 
-    void initializeGame() {
-        blackQueen = (1LL << 3);
-        whiteQueen = (1LL << 59);
-        
-        blackKing = (1LL << 4);
-        whiteKing = (1LL << 60);
-
-        blackKnight = (1LL << 1) | (1LL << 6);
-        whiteKnight = (1LL << 57) | (1LL << 62);
-        
-        blackRook = (1LL << 0) | (1LL << 7);
-        whiteRook = (1LL << 56) | (1LL << 63);
-
-        blackBishop = (1LL << 2) | (1LL << 5);
-        whiteBishop = (1LL << 58) | (1LL << 61);
-
-        for(int i = 8; i <= 15; i++){
-            blackPawn |= (1LL << i);
-        }
-        for(int i = 48; i <= 55; i++){
-            whitePawn |= (1LL << i);
-        }
-        whitePieces = whiteBishop | whiteKing | whitePawn | whiteKnight | whiteQueen | whiteRook;
-        blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
-
-    }
-    
     void printGame(){
         for(int i = 0; i < 8; i++){
             cout << 8-i << "  ";
@@ -179,9 +180,6 @@ public:
                 else if((blackRook >> mask) & 1) piece = "♖";
                 else if((blackKnight >> mask) & 1) piece = "♘";
 
-                // if((whiteLegalMoves >> mask) & 1) {
-                //     piece = "_";
-                // };
                 cout << piece << " ";
             }
             cout << "\n";
@@ -211,7 +209,6 @@ public:
             else if(c == 'K') whiteKing |= (1LL << set);
             else if(c == 'P') whitePawn |= (1LL << set);
             else if(isdigit(c)) {
-                // Skip the specified number of empty squares
                 j += (c - '0') - 1;
             }
             j++;
@@ -219,6 +216,8 @@ public:
         whitePieces = whiteBishop | whiteKing | whitePawn | whiteKnight | whiteQueen | whiteRook;
         blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
     }
+
+    // rewrite this
 
     int evaluateBoard() {
         int score = 0;
@@ -228,34 +227,36 @@ public:
                 int mirrorSquare = square ^ 56;
     
                 if (whitePawn & (1ULL << square))
-                    score += 1 + white_pawn[square];
+                    score += 1 + pawn_pref[square];
                 else if (whiteKnight & (1ULL << square))
-                    score += 3 + white_knight[square];
+                    score += 3 + knight_pref[square];
                 else if (whiteBishop & (1ULL << square))
-                    score += 3 + white_bishop[square];
+                    score += 3 + bishop_pref[square];
                 else if (whiteRook & (1ULL << square))
-                    score += 5 + white_rook[square];
+                    score += 5 + rook_pref[square];
                 else if (whiteQueen & (1ULL << square))
-                    score += 9 + white_queen[square];
+                    score += 9 + queen_pref[square];
                 else if (whiteKing & (1ULL << square))
-                    score += white_king[square];
+                    score += king_pref[square];
                 else if (blackPawn & (1ULL << square))
-                    score -= 1 + white_pawn[mirrorSquare];
+                    score -= 1 + pawn_pref[mirrorSquare];
                 else if (blackKnight & (1ULL << square))
-                    score -= 3 + white_knight[mirrorSquare];
+                    score -= 3 + knight_pref[mirrorSquare];
                 else if (blackBishop & (1ULL << square))
-                    score -= 3 + white_bishop[mirrorSquare];
+                    score -= 3 + bishop_pref[mirrorSquare];
                 else if (blackRook & (1ULL << square))
-                    score -= 5 + white_rook[mirrorSquare];
+                    score -= 5 + rook_pref[mirrorSquare];
                 else if (blackQueen & (1ULL << square))
-                    score -= 9 + white_queen[mirrorSquare];
+                    score -= 9 + queen_pref[mirrorSquare];
                 else if (blackKing & (1ULL << square))
-                    score -= white_king[mirrorSquare];
+                    score -= king_pref[mirrorSquare];
             }
         }
         return score;
     }    
     
+    // something is wrong with this
+
     uint64_t generatePieceMoves(bool isWhite, int pieceType) {
         uint64_t moves = 0;
         uint64_t ownPieces = isWhite ? whitePieces : blackPieces;
@@ -523,12 +524,16 @@ public:
         return moves;
     }
 
-    void generateMoves() {
-        for(int piece = 0; piece < 6; piece++) {
-            whiteLegalMoves |= generatePieceMoves(true, piece);
-            blackLegalMoves |= generatePieceMoves(false, piece);
+    void generateMoves(bool isWhite) {
+        if(isWhite) {
+            for(int piece = 0; piece < 6; piece++) {
+                whiteLegalMoves |= generatePieceMoves(true, piece);
+            }
+        } else {
+            for(int piece = 0; piece < 6; piece++) {
+                blackLegalMoves |= generatePieceMoves(false, piece);
+            }
         }
-        // printGeneratedMoves((turn) ? whiteLegalMoves : blackLegalMoves);
     }
 
     uint16_t encodeMove(bool isWhite, int pieceType, int startSquare, int endSquare){
@@ -549,10 +554,16 @@ public:
         // cout << color << " " << piece << " " << start << " " << end << " ";
     }
     
+
+    void moveTest(uint32_t m) {
+        Move mv(m);
+        
+    }
+    // rewrite this
+
     void makeMove() {
         uint64_t *currentPiece = nullptr;
     
-        // Identify the piece being moved based on its type and color
         switch (piece) {
             case 0: // Pawn
                 currentPiece = (!color ? &blackPawn : &whitePawn);
@@ -572,19 +583,14 @@ public:
             case 5: // King
                 currentPiece = (!color ? &blackKing : &whiteKing);
                 break;
-            default:
-                cout << "Invalid piece type!\n";
-                return;
         }
     
-        // Move the piece from the start square to the end square
-        *currentPiece &= ~(1ULL << start); // Remove from start
-        *currentPiece |= (1ULL << end);    // Add to end
+        *currentPiece &= ~(1ULL << start); 
+        *currentPiece |= (1ULL << end);    
     
-        // Handle captures
-        if(color) { // White is moving
+        // Captures
+        if(color) { 
             if(blackPieces & (1ULL << end)) { // If there's a black piece at the destination
-                // Identify which black piece is captured and remove it
                 if(blackPawn & (1ULL << end)) blackPawn &= ~(1ULL << end);
                 else if(blackRook & (1ULL << end)) blackRook &= ~(1ULL << end);
                 else if(blackBishop & (1ULL << end)) blackBishop &= ~(1ULL << end);
@@ -592,9 +598,8 @@ public:
                 else if(blackQueen & (1ULL << end)) blackQueen &= ~(1ULL << end);
                 else if(blackKing & (1ULL << end)) blackKing &= ~(1ULL << end);
             }
-        } else { // Black is moving
+        } else { 
             if(whitePieces & (1ULL << end)) { // If there's a white piece at the destination
-                // Identify which white piece is captured and remove it
                 if(whitePawn & (1ULL << end)) whitePawn &= ~(1ULL << end);
                 else if(whiteRook & (1ULL << end)) whiteRook &= ~(1ULL << end);
                 else if(whiteBishop & (1ULL << end)) whiteBishop &= ~(1ULL << end);
@@ -604,7 +609,6 @@ public:
             }
         }
     
-        // Update the combined piece bitboards
         whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
         blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
     }
@@ -652,13 +656,13 @@ public:
         bitboard = whitePawn;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score += pawnValue + white_pawn[pieceSquareIndex(true, square)];
-            bitboard &= bitboard - 1; // Remove least significant bit
+            score += pawnValue + pawn_pref[pieceSquareIndex(true, square)];
+            bitboard &= bitboard - 1;
         }
         bitboard = blackPawn;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score -= pawnValue + white_pawn[pieceSquareIndex(false, square)];
+            score -= pawnValue + pawn_pref[pieceSquareIndex(false, square)];
             bitboard &= bitboard - 1;
         }
 
@@ -666,13 +670,13 @@ public:
         bitboard = whiteKnight;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score += knightValue + white_knight[pieceSquareIndex(true, square)];
+            score += knightValue + knight_pref[pieceSquareIndex(true, square)];
             bitboard &= bitboard - 1;
         }
         bitboard = blackKnight;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score -= knightValue + white_knight[pieceSquareIndex(false, square)];
+            score -= knightValue + knight_pref[pieceSquareIndex(false, square)];
             bitboard &= bitboard - 1;
         }
 
@@ -680,13 +684,13 @@ public:
         bitboard = whiteBishop;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score += bishopValue + white_bishop[pieceSquareIndex(true, square)];
+            score += bishopValue + bishop_pref[pieceSquareIndex(true, square)];
             bitboard &= bitboard - 1;
         }
         bitboard = blackBishop;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score -= bishopValue + white_bishop[pieceSquareIndex(false, square)];
+            score -= bishopValue + bishop_pref[pieceSquareIndex(false, square)];
             bitboard &= bitboard - 1;
         }
 
@@ -694,13 +698,13 @@ public:
         bitboard = whiteRook;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score += rookValue + white_rook[pieceSquareIndex(true, square)];
+            score += rookValue + rook_pref[pieceSquareIndex(true, square)];
             bitboard &= bitboard - 1;
         }
         bitboard = blackRook;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score -= rookValue + white_rook[pieceSquareIndex(false, square)];
+            score -= rookValue + rook_pref[pieceSquareIndex(false, square)];
             bitboard &= bitboard - 1;
         }
 
@@ -708,13 +712,13 @@ public:
         bitboard = whiteQueen;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score += queenValue + white_queen[pieceSquareIndex(true, square)];
+            score += queenValue + queen_pref[pieceSquareIndex(true, square)];
             bitboard &= bitboard - 1;
         }
         bitboard = blackQueen;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score -= queenValue + white_queen[pieceSquareIndex(false, square)];
+            score -= queenValue + queen_pref[pieceSquareIndex(false, square)];
             bitboard &= bitboard - 1;
         }
 
@@ -722,21 +726,24 @@ public:
         bitboard = whiteKing;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score += white_king[pieceSquareIndex(true, square)];
+            score += king_pref[pieceSquareIndex(true, square)];
             bitboard &= bitboard - 1;
         }
         bitboard = blackKing;
         while (bitboard) {
             int square = __builtin_ctzll(bitboard);
-            score -= white_king[pieceSquareIndex(false, square)];
+            score -= king_pref[pieceSquareIndex(false, square)];
             bitboard &= bitboard - 1;
         }
-
+        uint64_t attacked = getAttackedSquares(false);
+        if(attacked & whiteKing) score -= 1000000;
+        attacked = getAttackedSquares(true);
+        if(attacked & blackKing) score += 1000000;
         return score;
     }
 
 
-// final search implementation 
+    // rewrite this
 
     int search(int depth, bool isWhite) {
         if (depth == 0) {
@@ -745,9 +752,7 @@ public:
         }
 
         moveList.clear();
-        for(int piece = 0; piece < 6; piece++) {
-            generatePieceMoves(isWhite, piece);
-        }
+        generateMoves(isWhite);
 
         if (moveList.empty()) {
             return isWhite ? -99999 : 99999;  // No moves available
@@ -797,23 +802,24 @@ public:
             if (isWhite) {
                 if (score > bestScore) {
                     bestScore = score;
-                    if (depth == 4) bestMove = mv;
+                    if (depth == initialDepth) bestMove = mv;
                 }
             } else {
                 if (score < bestScore) {
                     bestScore = score;
-                    if (depth == 4) bestMove = mv;
+                    if (depth == initialDepth) bestMove = mv;
                 }
             }
         }
 
-        moveList = currentMoves;  // Restore moves list
+        moveList = currentMoves;  
         return bestScore;
     }
 
     void testSearch() {
         moveList.clear();
-        int score = search(4, true);
+        initialDepth = 1;
+        int score = search(initialDepth, false);
         cout << "Search completed\n";
         cout << "Best move score: " << score << "\n";
         if (bestMove != 0) {
@@ -831,22 +837,21 @@ public:
 int main() {
     Board b;
     cout << "\n";
-    // b.initializeGame();
+    // b.setupGame("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
     // b.setupGame("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8");
     // b.setupGame("6r/8/8/8/8/8/7K/6q");
-    // b.setupGame("6r/8/8/8/8/8/8/6K");
     // b.setupGame("r3RB1n/p5K/3Q/1k/3pP3/8/1P3P1q/8");
     // b.setupGame("r3kb1r/2p1pppp/p4nb1/3p2B1/1q4P1/2NP1N1P/PPP1QP2/R3K2R");
     // b.setupGame("2p5/8/8/8/8/2P5/3B4/3K4");
-    b.setupGame("r3kb1r/ppp2p1p/5p2/3qp3/3N4/7P/PPPPKPP1/R1B4R");
-    // b.setupGame("r1bqkb1r/pppppppp/2n2n2/8/3P4/2N2N2/PPP1PPPP/R1BQKB1R");
+    // b.setupGame("r3kb1r/ppp2p1p/5p2/3qp3/3N4/7P/PPPPKPP1/R1B4R");
+    b.setupGame("8/8/8/8/8/1q/8/5K");
     // b.generateMoves();
     b.printGame();
     // b.test();
     // cout << b.evaluateBoard() << "\n"; 
     // cout << b.testEvaluate() << "\n";
     // b.printGame();
-    b.testSearch();
+    // b.testSearch();
 
     return 0;
 }
