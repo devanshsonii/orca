@@ -11,8 +11,10 @@
         -> Board evaluation
             -> Checks aren't working
         -> Searching
-*/
 
+    -> en passant not working
+
+*/
 
 #include <iostream> 
 #include <vector>
@@ -36,14 +38,13 @@ const uint64_t RANK_6 = 0x0000FF0000000000;
 const uint64_t RANK_7 = 0x00FF000000000000;
 const uint64_t RANK_8 = 0xFF00000000000000;
 
-int initialDepth = 5;
+int initialDepth = 4;
 
 class Move {
 public:
     int color, piece, startSquare, endSquare, capturedPiece;
 
     Move() {
-
     }
     Move(uint32_t m) {
         color = (m >> 15) & 1;
@@ -58,6 +59,39 @@ public:
         this->startSquare = startSquare;
         this->endSquare = endSquare;
         this->capturedPiece = capturedPiece;
+    }
+    void printMove() {
+        switch (piece) {
+            case 0: // pawn
+                // cout << "P";
+            // else cout << "p";
+            break;
+            case 1: // rook
+                cout << "R";
+            // else cout << "r";
+            break;
+            case 2: // bishop
+                cout << "B";
+            // else cout << "b";
+            break;
+            case 3: // queen
+                cout << "Q";
+            // else cout << "q";
+            break;
+            case 4: // knight
+                cout << "N";
+            // else cout << "n";
+            break;
+            case 5: // king
+                cout << "K";
+            // else cout << "k";
+            break;
+        }
+        // convert endSquare into File/Rank
+        char file = 'a' + (endSquare % 8);
+        char rank = '1' + 7-(endSquare / 8);
+        cout << string(1,file) + string(1,rank) << "\n";
+
     }
 };
 
@@ -78,6 +112,7 @@ class Board {
     uint64_t blackKing = 0;
     uint64_t blackQueen = 0;
     uint64_t blackPieces = 0;
+    
     
     int knight_pref[64] = {
         -66, -53, -75, -75, -10, -55, -58, -70,
@@ -153,6 +188,13 @@ class Board {
     uint64_t whiteLegalMoves = 0;
     uint64_t blackLegalMoves = 0;
 
+    bool whiteCanCastleKingSide;
+    bool whiteCanCastleQueenSide;
+    bool blackCanCastleKingSide;
+    bool blackCanCastleQueenSide;
+    int enPassantSquare; 
+    int halfmoveClock;
+    int fullmoveNumber;
 
     string indexToAlgebraic(int index) {
         if(index < 0 || index > 63) return "??";
@@ -160,15 +202,6 @@ class Board {
         char rank = '1' + 7-(index / 8);
         return string(1, file) + string(1, rank);
     }
-
-    // rewrite this
-    // uint64_t getAttackedSquares(bool byWhite) {
-    //     uint64_t attacked = 0;
-    //     for(int piece = 0; piece < 5; piece++) {
-    //         attacked |= generatePieceMoves(byWhite, piece);
-    //     }
-    //     return attacked;
-    // }
 
     uint16_t encodeMove(bool isWhite, int pieceType, int startSquare, int endSquare){
         uint16_t move = 0;
@@ -212,6 +245,7 @@ class Board {
         return false;
     }
 
+
 public:
     vector<Move> moveList;
     Move bestMove;
@@ -246,9 +280,17 @@ public:
         cout << "\n   A B C D E F G H\n";
     }
 
-    void setupGameFromFEN(string moveSet) {
-        int i = 0, j = 0;
-        for(char c: moveSet){
+        void setupGameFromFEN(string moveSet) {
+        // Reset all bitboards
+        whitePawn = whiteRook = whiteBishop = whiteKnight = whiteQueen = whiteKing = 0;
+        blackPawn = blackRook = blackBishop = blackKnight = blackQueen = blackKing = 0;
+        
+        int i = 0, j = 0, index = 0;
+        
+        // Parse piece placement
+        for(char c: moveSet) {
+            index++;
+            if(c == ' ') break;
             int set = i*8 + j;
             if(c == '/') {
                 i++;
@@ -274,6 +316,47 @@ public:
         }
         whitePieces = whiteBishop | whiteKing | whitePawn | whiteKnight | whiteQueen | whiteRook;
         blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
+        
+        turn = (moveSet[index] == 'w');
+        index += 2; 
+        
+        whiteCanCastleKingSide = whiteCanCastleQueenSide = false;
+        blackCanCastleKingSide = blackCanCastleQueenSide = false;
+        
+        while(moveSet[index] != ' ') {
+            switch(moveSet[index]) {
+                case 'K': whiteCanCastleKingSide = true; break;
+                case 'Q': whiteCanCastleQueenSide = true; break;
+                case 'k': blackCanCastleKingSide = true; break;
+                case 'q': blackCanCastleQueenSide = true; break;
+                case '-': break;
+            }
+            index++;
+        }
+        index++; 
+        
+        if(moveSet[index] == '-') {
+            enPassantSquare = -1;
+            index++;
+        } else {
+            int file = moveSet[index] - 'a';
+            int rank = '8' - moveSet[index + 1];
+            enPassantSquare = rank * 8 + file;
+            index += 2;
+        }
+        index++; 
+        
+        halfmoveClock = 0;
+        while(moveSet[index] != ' ') {
+            halfmoveClock = halfmoveClock * 10 + (moveSet[index] - '0');
+            index++;
+        }
+        index++; 
+        fullmoveNumber = 0;
+        while(index < moveSet.length() && isdigit(moveSet[index])) {
+            fullmoveNumber = fullmoveNumber * 10 + (moveSet[index] - '0');
+            index++;
+        }
     }
 
     // something is wrong with this
@@ -296,16 +379,12 @@ public:
                         int endSquare = __builtin_ctzll(target);
                         int startSquare = endSquare + 8;
                         // Promotion
-                        if (endSquare / 8 == 7) {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        } else {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        }
+                        moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
                         singlePush &= singlePush - 1;
                     }
 
                     // Double Push
-                    uint64_t doublePush = ((pawns & RANK_2) >> 8) & empty;
+                    uint64_t doublePush = ((pawns & RANK_7) >> 8) & empty;
                     doublePush = (doublePush >> 8) & empty;
                     while(doublePush) {
                         uint64_t target = doublePush & -doublePush;
@@ -322,11 +401,7 @@ public:
                         int endSquare = __builtin_ctzll(target);
                         int startSquare = endSquare + 9;
                         // Promotion
-                        if (endSquare / 8 == 7) {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        } else {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        }
+                        moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
                         leftCaptures &= leftCaptures - 1;
                     }
 
@@ -336,11 +411,7 @@ public:
                         int endSquare = __builtin_ctzll(target);
                         int startSquare = endSquare + 7;
                         // Promotion
-                        if (endSquare / 8 == 7) {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        } else {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        }
+                        moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
                         rightCaptures &= rightCaptures - 1;
                     }
                 } else {
@@ -351,16 +422,12 @@ public:
                         int endSquare = __builtin_ctzll(target);
                         int startSquare = endSquare - 8;
                         // Promotion
-                        if (endSquare / 8 == 0) {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        } else {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        }
+                        moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
                         singlePush &= singlePush - 1;
                     }
 
                     // Double Push
-                    uint64_t doublePush = ((pawns & RANK_7) << 8) & empty;
+                    uint64_t doublePush = ((pawns & RANK_2) << 8) & empty;
                     doublePush = (doublePush << 8) & empty;
                     while(doublePush) {
                         uint64_t target = doublePush & -doublePush;
@@ -377,11 +444,7 @@ public:
                         int endSquare = __builtin_ctzll(target);
                         int startSquare = endSquare - 9;
                         // Promotion
-                        if (endSquare / 8 == 0) {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        } else {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        }
+                        moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
                         leftCaptures &= leftCaptures - 1;
                     }
 
@@ -391,11 +454,7 @@ public:
                         int endSquare = __builtin_ctzll(target);
                         int startSquare = endSquare - 7;
                         // Promotion
-                        if (endSquare / 8 == 0) {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        } else {
-                            moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
-                        }
+                        moves.emplace_back(isWhite, 0, startSquare, endSquare, -1);
                         rightCaptures &= rightCaptures - 1;
                     }
                 }
@@ -624,10 +683,28 @@ public:
                 possible |= (king >> 7) & ~A_FILE;
                 possible |= (king << 7) & ~H_FILE;
                 possible |= (king >> 9) & ~H_FILE;
+
+                vector<Move> temp;
+                uint64_t enemyAttack = 0;
+                for(int i = 0; i < 5; i++){
+                    enemyAttack |= generatePieceMoves(!isWhite, i, temp);
+                }
+
+                uint64_t opponentKing = isWhite ? blackKing : whiteKing;
+                uint64_t opponentKingMoves = 0;
+                opponentKingMoves |= (opponentKing << 8) | (opponentKing >> 8);
+                opponentKingMoves |= (opponentKing << 1) & ~A_FILE;
+                opponentKingMoves |= (opponentKing >> 1) & ~H_FILE;
+                opponentKingMoves |= (opponentKing << 9) & ~A_FILE;
+                opponentKingMoves |= (opponentKing >> 7) & ~A_FILE;
+                opponentKingMoves |= (opponentKing << 7) & ~H_FILE;
+                opponentKingMoves |= (opponentKing >> 9) & ~H_FILE;
+                enemyAttack |= opponentKingMoves;
+
                 
-                uint64_t kingMoves = possible & ~ownPieces ;
+                uint64_t kingMoves = possible & ~ownPieces & ~enemyAttack;
                 movesBits |= kingMoves;
-                
+
                 int startSquare = __builtin_ctzll(king);
     
                 uint64_t targets = kingMoves;
@@ -709,8 +786,6 @@ public:
         return score;
     }
 
-    
-
     // rewrite this
 
     void makeMove(Move& mv) {
@@ -788,6 +863,7 @@ public:
     
         // Update move with captured piece
         mv.capturedPiece = capturedPiece;
+        turn = !turn;
     }
     
     void unMakeMove(Move& mv) {
@@ -864,6 +940,7 @@ public:
         // Update combined piece bitboards
         whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
         blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
+        turn = !turn;
     }
 
 
@@ -942,39 +1019,170 @@ public:
     }
 
 
+    void outputFen() {
+        std::string fen = "";
+
+        // 1. Piece Placement
+        for(int rank = 0; rank < 8; rank++) { // From rank 8 to 1
+            int emptyCount = 0;
+            for(int file = 0; file < 8; file++) { // From file a to h
+                int square = (rank) * 8 + file;
+                char piece = '-';
+
+                if(whitePawn & (1ULL << square)) piece = 'P';
+                else if(whiteRook & (1ULL << square)) piece = 'R';
+                else if(whiteBishop & (1ULL << square)) piece = 'B';
+                else if(whiteKnight & (1ULL << square)) piece = 'N';
+                else if(whiteQueen & (1ULL << square)) piece = 'Q';
+                else if(whiteKing & (1ULL << square)) piece = 'K';
+
+                else if(blackPawn & (1ULL << square)) piece = 'p';
+                else if(blackRook & (1ULL << square)) piece = 'r';
+                else if(blackBishop & (1ULL << square)) piece = 'b';
+                else if(blackKnight & (1ULL << square)) piece = 'n';
+                else if(blackQueen & (1ULL << square)) piece = 'q';
+                else if(blackKing & (1ULL << square)) piece = 'k';
+
+                if(piece == '-') {
+                    emptyCount++;
+                }
+                else {
+                    if(emptyCount > 0) {
+                        fen += std::to_string(emptyCount);
+                        emptyCount = 0;
+                    }
+                    fen += piece;
+                }
+            }
+            if(emptyCount > 0) {
+                fen += std::to_string(emptyCount);
+            }
+            if(rank != 7) {
+                fen += '/';
+            }
+        }
+
+        // // 2. Active Color
+        // fen += ' ';
+        // fen += (turn) ? 'w' : 'b';
+
+        // // 3. Castling Availability
+        // fen += ' ';
+        // std::string castling = "";
+        // if(whiteCanCastleKingSide) castling += 'K';
+        // if(whiteCanCastleQueenSide) castling += 'Q';
+        // if(blackCanCastleKingSide) castling += 'k';
+        // if(blackCanCastleQueenSide) castling += 'q';
+        // fen += (castling.empty()) ? "-" : castling;
+
+        // // 4. En Passant Target Square
+        // fen += ' ';
+        // fen += (enPassantSquare == -1) ? '-' : indexToAlgebraic(enPassantSquare)[0];
+
+        // // 5. Halfmove Clock
+        // fen += ' ';
+        // fen += std::to_string(halfmoveClock);
+
+        // // 6. Fullmove Number
+        // fen += ' ';
+        // fen += std::to_string(fullmoveNumber);
+
+        // // Output the FEN string
+        std::cout << fen << "\n";
+    }
+
+    void generatorTest() {
+        vector<Move> testMoves = generateMoves(turn);
+        vector<Move> temp = generateMoves(!turn);
+        for(Move it: testMoves) {
+            it.printMove();
+            makeMove(it);
+            outputFen();
+            cout << "\n";
+            unMakeMove(it);
+        }
+        for(Move it: temp) {
+            it.printMove();
+            makeMove(it);
+            outputFen();
+            cout << "\n";
+            unMakeMove(it);
+        }
+    }
+
+    void play() {
+        while(true) {
+            printGame();
+            string mv;
+            cout << "Enter your move: ";
+            cin >> mv;
+    
+            char start_file = mv[0];
+            char start_rank = mv[1];
+            char end_file = mv[2];
+            char end_rank = mv[3];
+    
+            int start = (7 - (start_rank - '1')) * 8 + (start_file - 'a');
+            int end = (7-(end_rank - '1')) * 8 + (end_file - 'a');
+    
+            int piece = -1;
+            if(whitePawn & (1ULL << start)) piece = 0;
+            else if(whiteRook & (1ULL << start)) piece = 1;
+            else if(whiteBishop & (1ULL << start)) piece = 2;
+            else if(whiteQueen & (1ULL << start)) piece = 3;
+            else if(whiteKnight & (1ULL << start)) piece = 4;
+            else if(whiteKing & (1ULL << start)) piece = 5;
+    
+            Move userMove(true, piece, start, end, -1);
+            makeMove(userMove);
+    
+            printGame();
+    
+            cout << "Engine is thinking...\n";
+            testMoving(false, initialDepth, -100000, 100000);
+    
+            makeMove(bestMove);
+    
+            // printGame();
+    
+            // TODO: Implement game termination checks
+        }
+    }
+
+    int perft(bool isWhite, int depth) {
+        if (depth == 0) return 1; // Leaf node, count as 1 move.
+
+        int nodes = 0;
+        vector<Move> moves;
+        moves = generateMoves(isWhite); // Generate all legal moves.
+        for (Move mv : moves) {
+            makeMove(mv);       // Apply the move.
+            nodes += perft(!isWhite, depth - 1); // Recursive call.
+            unMakeMove(mv);     // Undo the move.
+        }
+
+        return nodes;
+    }
+
 };
 
 int main() {
     Board b;
-    cout << "\n";
-    b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
-
-    // b.setupGameFromFEN("r6r/ppp1k1pp/2npb3/3p4/6n1/8/2PKN1RP/5q2");
-    // b.setupGameFromFEN("r2qkb1r/2p2ppp/4pn2/3p4/p7/5P1P/1PPPQP2/R1B1K2R");
-    // // b.generateMoves();
-    b.printGame();
-    bool color = true;
-    for (int i = 0; i < 20; i++)
-    {
-        b.testMoving(color, initialDepth, -100000, 100000);
-        b.makeMove(b.bestMove);
-        b.printGame();
-        color = !color;
+    // cout << "\n";
+    b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1");
+    // b.play();
+    for(int depth = 1; depth <= 6; depth++){
+        int sum = b.perft(true, depth);
+        cout << sum << "\n";
     }
-    
-    // // cout << b.bestMove.startSquare << " " << b.bestMove.endSquare << "\n";
-    // // b.printGame();
-
-    // cout << b.count << "\n";
-    // b.printGame();
-    // while(true){
-    //     int a, s, e;
-    //     cin >> a >> s >> e;
-    //     Move mv(1, a, s, e, -1);
-    //     b.makeMove(mv);
-    //     b.testMoving(0, initialDepth, -100000, 100000);
+    // bool color = true;
+    // b.testMoving(color, initialDepth, -100000, 100000);
+    // for (int i = 0; i < 100; i++)
+    // {
     //     b.makeMove(b.bestMove);
     //     b.printGame();
+    //     cout << b.evaluateBoard() << "\n"; 
+    //     color = !color;
     // }
     return 0;
 }
