@@ -38,7 +38,20 @@ const uint64_t RANK_6 = 0x0000FF0000000000;
 const uint64_t RANK_7 = 0x00FF000000000000;
 const uint64_t RANK_8 = 0xFF00000000000000;
 
-int initialDepth = 4;
+const uint8_t PIECE_NONE = 6;
+const uint8_t PIECE_PAWN = 0;
+const uint8_t PIECE_ROOK = 1;
+const uint8_t PIECE_BISHOP = 2; 
+const uint8_t PIECE_QUEEN = 3;
+const uint8_t PIECE_KNIGHT = 4;
+const uint8_t PIECE_KING = 5;
+
+const uint8_t COLOR_WHITE = 0x8;
+const uint8_t COLOR_BLACK = 0;
+const uint8_t PIECE_MASK = 0x7;
+const uint8_t COLOR_MASK = 0x8;
+
+int initialDepth = 3;
 
 class Move {
 public:
@@ -112,7 +125,6 @@ class Board {
     uint64_t blackKing = 0;
     uint64_t blackQueen = 0;
     uint64_t blackPieces = 0;
-    
     
     int knight_pref[64] = {
         -66, -53, -75, -75, -10, -55, -58, -70,
@@ -232,11 +244,13 @@ class Board {
         return pieceScore;
     }
     
+public:
     // fix this
     bool isKingInCheck(bool isWhite) {
         uint64_t king = isWhite ? whiteKing : blackKing;
         int kingSq = __builtin_ctzll(king);
-        vector<Move> enemyMoves = generateMoves(!isWhite);
+        vector<Move> enemyMoves;
+        generateMoves(!isWhite, enemyMoves);
         for(auto &mv : enemyMoves) {
             if(mv.endSquare == kingSq) {
                 return true;
@@ -245,8 +259,6 @@ class Board {
         return false;
     }
 
-
-public:
     vector<Move> moveList;
     Move bestMove;
     int count = 0;
@@ -280,7 +292,7 @@ public:
         cout << "\n   A B C D E F G H\n";
     }
 
-        void setupGameFromFEN(string moveSet) {
+    void setupGameFromFEN(string moveSet) {
         // Reset all bitboards
         whitePawn = whiteRook = whiteBishop = whiteKnight = whiteQueen = whiteKing = 0;
         blackPawn = blackRook = blackBishop = blackKnight = blackQueen = blackKing = 0;
@@ -290,8 +302,8 @@ public:
         // Parse piece placement
         for(char c: moveSet) {
             index++;
-            if(c == ' ') break;
             int set = i*8 + j;
+            if(c == ' ') break;
             if(c == '/') {
                 i++;
                 j = 0;
@@ -358,14 +370,13 @@ public:
             index++;
         }
     }
-
     // something is wrong with this
 
     uint64_t generatePieceMoves(bool isWhite, int pieceType, vector<Move>& moves) {
         uint64_t movesBits = 0;
         uint64_t ownPieces = isWhite ? whitePieces : blackPieces;
         uint64_t enemyPieces = isWhite ? blackPieces : whitePieces;
-        
+
         switch(pieceType) {
             case 0: { // Pawn
                 uint64_t pawns = isWhite ? whitePawn : blackPawn;
@@ -674,7 +685,6 @@ public:
             case 5: { // King
                 uint64_t king = isWhite ? whiteKing : blackKing;
                 uint64_t possible = 0;
-                // uint64_t enemyAttacks = getAttackedSquares(!isWhite);
     
                 possible |= (king << 8) | (king >> 8);
                 possible |= (king << 1) & ~A_FILE;
@@ -722,25 +732,20 @@ public:
         return movesBits;
     }
 
-    vector<Move> generateMoves(bool isWhite) {
-        vector<Move> localMoveList; // Local move list for this invocation
-
-        // Iterate over all piece types (0: Pawn, 1: Rook, 2: Bishop, 3: Queen, 4: Knight, 5: King)
+    void generateMoves(bool isWhite, vector<Move> &mvs) {
         for(int pieceType = 0; pieceType < 6; pieceType++) {
-            generatePieceMoves(isWhite, pieceType, localMoveList);
+            generatePieceMoves(isWhite, pieceType, mvs);
         }
 
-        return localMoveList;
     }
 
-        
     int evaluateBoard() {
         int score = 0;
         const int PAWN_VALUE = 100;
-        const int KNIGHT_VALUE = 280;
-        const int BISHOP_VALUE = 320;
-        const int ROOK_VALUE = 479;
-        const int QUEEN_VALUE = 929;
+        const int KNIGHT_VALUE = 300;
+        const int BISHOP_VALUE = 300;
+        const int ROOK_VALUE = 500;
+        const int QUEEN_VALUE = 900;
         const int KING_VALUE = 60000;
         // Material counting
         int whiteMaterial = 0;
@@ -785,18 +790,15 @@ public:
         
         return score;
     }
-
     // rewrite this
-
     void makeMove(Move& mv) {
         uint64_t *currentPiece = nullptr;
-
         int color = mv.color;
         int piece = mv.piece;
         int start = mv.startSquare;
         int end = mv.endSquare;
         int capturedPiece = -1;
-    
+
         switch (piece) {
             case 0: // Pawn
                 currentPiece = (!color ? &blackPawn : &whitePawn);
@@ -831,7 +833,7 @@ public:
                 else if (blackQueen & (1ULL << end)) { blackQueen &= ~(1ULL << end); capturedPiece = 3; }
                 else if (blackKing & (1ULL << end)) { blackKing &= ~(1ULL << end); capturedPiece = 5; }
             }
-        } else { // Black to move
+        } else {
             if (whitePieces & (1ULL << end)) {
                 if (whitePawn & (1ULL << end)) { whitePawn &= ~(1ULL << end); capturedPiece = 0; }
                 else if (whiteRook & (1ULL << end)) { whiteRook &= ~(1ULL << end); capturedPiece = 1; }
@@ -857,11 +859,10 @@ public:
             }
         }
     
-        // Update combined piece bitboards
+        // 6. Update combined bitboards
         whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
         blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
     
-        // Update move with captured piece
         mv.capturedPiece = capturedPiece;
         turn = !turn;
     }
@@ -926,7 +927,6 @@ public:
                 }
             }
         }
-    
         // Handle promotions
         if (piece == 0) { // Pawn
             if ((color && (start / 8) == 6) || (!color && (start / 8) == 1)) {
@@ -936,47 +936,15 @@ public:
                 else blackPawn |= (1ULL << start); // Revert to Black Pawn
             }
         }
-    
         // Update combined piece bitboards
         whitePieces = whitePawn | whiteRook | whiteBishop | whiteKnight | whiteQueen | whiteKing;
         blackPieces = blackPawn | blackRook | blackBishop | blackKnight | blackQueen | blackKing;
         turn = !turn;
     }
 
-
-    // int testMoving(bool isWhite, int depth) {
-    //     vector<Move> moves = generateMoves(isWhite);
-    //     // Base case
-    //     if(depth == 0) {
-    //         count++;
-    //         return evaluateBoard();
-    //     }
-    //     int localBest = isWhite ? -100000 : 100000;
-    //     Move bestLocalMove;
-    //     for(auto& mv: moves) {
-    //         makeMove(mv);
-    //         int score = testMoving(!isWhite, depth - 1);
-    //         unMakeMove(mv);
-    //         if(isWhite) {
-    //             // if(score > localBest) {
-    //             //     localBest = score;
-    //             //     bestLocalMove = mv;
-    //             // }
-    //         } else {
-    //             // if(score < localBest) {
-    //             //     localBest = score;
-    //             //     bestLocalMove = mv;
-    //             // }
-    //         }
-    //     }
-    //     if(depth == initialDepth) {
-    //         bestMove = bestLocalMove;
-    //     }
-    //     return localBest;
-    // }
-
-    int testMoving(bool isWhite, int depth, int alpha, int beta) {
-        vector<Move> moves = generateMoves(isWhite);
+    int search(bool isWhite, int depth, int alpha, int beta) {
+        vector<Move> moves;
+        generateMoves(isWhite, moves);
         
         // Base case
         if (depth == 0) {
@@ -988,7 +956,7 @@ public:
         
         for (auto& mv : moves) {
             makeMove(mv);
-            int score = testMoving(!isWhite, depth - 1, alpha, beta);
+            int score = search(!isWhite, depth - 1, alpha, beta);
             unMakeMove(mv);
             
             if (isWhite) {
@@ -1017,7 +985,6 @@ public:
         
         return localBest;
     }
-
 
     void outputFen() {
         std::string fen = "";
@@ -1091,25 +1058,6 @@ public:
         std::cout << fen << "\n";
     }
 
-    void generatorTest() {
-        vector<Move> testMoves = generateMoves(turn);
-        vector<Move> temp = generateMoves(!turn);
-        for(Move it: testMoves) {
-            it.printMove();
-            makeMove(it);
-            outputFen();
-            cout << "\n";
-            unMakeMove(it);
-        }
-        for(Move it: temp) {
-            it.printMove();
-            makeMove(it);
-            outputFen();
-            cout << "\n";
-            unMakeMove(it);
-        }
-    }
-
     void play() {
         while(true) {
             printGame();
@@ -1139,10 +1087,9 @@ public:
             printGame();
     
             cout << "Engine is thinking...\n";
-            testMoving(false, initialDepth, -100000, 100000);
+            search(false, initialDepth, -100000, 100000);
     
             makeMove(bestMove);
-    
             // printGame();
     
             // TODO: Implement game termination checks
@@ -1150,11 +1097,14 @@ public:
     }
 
     int perft(bool isWhite, int depth) {
-        if (depth == 0) return 1; // Leaf node, count as 1 move.
+        if (depth == 0){
+            // printGame();
+            return 1;
+        }
 
         int nodes = 0;
         vector<Move> moves;
-        moves = generateMoves(isWhite); // Generate all legal moves.
+        generateMoves(isWhite, moves); // Generate all legal moves.
         for (Move mv : moves) {
             makeMove(mv);       // Apply the move.
             nodes += perft(!isWhite, depth - 1); // Recursive call.
@@ -1163,27 +1113,19 @@ public:
 
         return nodes;
     }
-
 };
 
 int main() {
     Board b;
     // cout << "\n";
-    b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1");
+    b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    // b.setupGameFromFEN("7k/8/8/8/1q6/P7/8/4K3 w - - 0 1");
+    // b.setupGameFromFEN("rnb1k2r/pppp1ppp/4pn2/5q2/2PP4/N7/PP1QPPPP/R3KBNR w KQkq - 1 8");
     // b.play();
     for(int depth = 1; depth <= 6; depth++){
         int sum = b.perft(true, depth);
         cout << sum << "\n";
     }
-    // bool color = true;
-    // b.testMoving(color, initialDepth, -100000, 100000);
-    // for (int i = 0; i < 100; i++)
-    // {
-    //     b.makeMove(b.bestMove);
-    //     b.printGame();
-    //     cout << b.evaluateBoard() << "\n"; 
-    //     color = !color;
-    // }
     return 0;
 }
 
