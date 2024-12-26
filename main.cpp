@@ -1,5 +1,4 @@
 #include <iostream> 
-#include <vector>
 using namespace std;
 
 const uint64_t A_FILE = 0x0101010101010101;
@@ -11,14 +10,18 @@ const uint64_t F_FILE = 0x2020202020202020;
 const uint64_t G_FILE = 0x4040404040404040;
 const uint64_t H_FILE = 0x8080808080808080;
 
-const uint64_t RANK_1 = 0x00000000000000FF;
-const uint64_t RANK_2 = 0x000000000000FF00;
-const uint64_t RANK_3 = 0x0000000000FF0000;
-const uint64_t RANK_4 = 0x00000000FF000000;
-const uint64_t RANK_5 = 0x000000FF00000000;
-const uint64_t RANK_6 = 0x0000FF0000000000;
-const uint64_t RANK_7 = 0x00FF000000000000;
-const uint64_t RANK_8 = 0xFF00000000000000;
+const uint64_t RANK_8 = 0x00000000000000FF;
+const uint64_t RANK_7 = 0x000000000000FF00;
+const uint64_t RANK_6 = 0x0000000000FF0000;
+const uint64_t RANK_5 = 0x00000000FF000000;
+const uint64_t RANK_4 = 0x000000FF00000000;
+const uint64_t RANK_3 = 0x0000FF0000000000;
+const uint64_t RANK_2 = 0x00FF000000000000;
+const uint64_t RANK_1 = 0xFF00000000000000;
+
+const int DIRECTIONS_STRAIGHT[4] = {8, -8, 1, -1}; // down, up, right, left
+const int DIRECTIONS_DIAGONAL[4] = {9, -9, 7, -7}; // bottom-right, top-left, bottom-left, top-right
+
 
 const int PIECE_NONE = 6;
 const int PIECE_PAWN = 0;
@@ -33,7 +36,7 @@ const uint8_t COLOR_BLACK = 0;
 const uint8_t PIECE_MASK = 0x7;
 const uint8_t COLOR_MASK = 0x8;
 
-int initialDepth = 3;
+int initialDepth = 5;
 
 struct Move {
     bool isWhite;          // True if white, false if black
@@ -133,7 +136,6 @@ private:
         17,  30,  -3, -14,   6,  -1,  40,  18
     };
 
-    bool turn = false; // true = white, false = black;
 
     bool whiteCanCastleKingSide;
     bool whiteCanCastleQueenSide;
@@ -143,12 +145,7 @@ private:
     int halfmoveClock;
     int fullmoveNumber;
 
-    string indexToAlgebraic(int index) {
-        if(index < 0 || index > 63) return "??";
-        char file = 'a' + (index % 8);
-        char rank = '1' + 7-(index / 8);
-        return string(1, file) + string(1, rank);
-    }
+    uint8_t allPieces[64];
 
     uint64_t knight_attacks[64] = {
         0x20400ULL, 0x50800ULL, 0xa1100ULL, 0x142200ULL, 0x284400ULL, 0x508800ULL, 0xa01000ULL, 0x402000ULL,
@@ -161,202 +158,276 @@ private:
         0x2000204000000000ULL, 0x4020000000000ULL, 0x8050000000000ULL, 0x110a0000000000ULL, 0x22140000000000ULL, 0x44280000000000ULL, 0x88500000000000ULL, 0x10a00000000000ULL, 0x20400000000000ULL
     };
 
+    string indexToAlgebraic(int index) {
+        if(index < 0 || index > 63) return "??";
+        char file = 'a' + (index % 8);
+        char rank = '1' + 7-(index / 8);
+        return string(1, file) + string(1, rank);
+    }
+
 
 public:
+    Move bestMove;
+
+    int moveSearched = 0;
+
     Board() {}
 
-    void printGame(){
-        for(int i = 0; i < 8; i++){
-            cout << 8-i << "  ";
-            for(int j = 0; j < 8; j++){
-                int mask = i*8 + j;
-                string piece = ".";
-                if((whiteQueen >> mask) & 1) piece = "♛";
-                else if((whitePawn >> mask) & 1) piece = "♟";
-                else if((whiteBishop >> mask) & 1) piece = "♝";
-                else if((whiteKing >> mask) & 1) piece = "♚";
-                else if((whiteRook >> mask) & 1) piece = "♜";
-                else if((whiteKnight >> mask) & 1) piece = "♞";
+    void printGame();
 
-                else if((blackQueen >> mask) & 1) piece = "♕";
-                else if((blackPawn >> mask) & 1) piece = "♙";
-                else if((blackBishop >> mask) & 1) piece = "♗";
-                else if((blackKing >> mask) & 1) piece = "♔";
-                else if((blackRook >> mask) & 1) piece = "♖";
-                else if((blackKnight >> mask) & 1) piece = "♘";
+    void setupGameFromFEN(string moveSet);
 
-                cout << piece << " ";
-            }
-            cout << "\n";
-        }
-        cout << "\n   A B C D E F G H\n";
-    }
-
-    void setupGameFromFEN(string moveSet) {
-        // Reset all bitboards
-        whitePawn = whiteRook = whiteBishop = whiteKnight = whiteQueen = whiteKing = 0;
-        blackPawn = blackRook = blackBishop = blackKnight = blackQueen = blackKing = 0;
-        
-        int i = 0, j = 0, index = 0;
-        
-        // Parse piece placement
-        for(char c: moveSet) {
-            index++;
-            int set = i*8 + j;
-            if(c == ' ') break;
-            if(c == '/') {
-                i++;
-                j = 0;
-                continue;
-            }
-            else if(c == 'r') blackRook |= (1LL << set);
-            else if(c == 'n') blackKnight |= (1LL << set);
-            else if(c == 'b') blackBishop |= (1LL << set);
-            else if(c == 'q') blackQueen |= (1LL << set);
-            else if(c == 'k') blackKing |= (1LL << set);
-            else if(c == 'p') blackPawn |= (1LL << set);
-            else if(c == 'R') whiteRook |= (1LL << set);
-            else if(c == 'N') whiteKnight |= (1LL << set);
-            else if(c == 'B') whiteBishop |= (1LL << set);
-            else if(c == 'Q') whiteQueen |= (1LL << set);
-            else if(c == 'K') whiteKing |= (1LL << set);
-            else if(c == 'P') whitePawn |= (1LL << set);
-            else if(isdigit(c)) {
-                j += (c - '0') - 1;
-            }
-            j++;
-        }
-        whitePieces = whiteBishop | whiteKing | whitePawn | whiteKnight | whiteQueen | whiteRook;
-        blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
-        
-        turn = (moveSet[index] == 'w');
-        index += 2; 
-        
-        whiteCanCastleKingSide = whiteCanCastleQueenSide = false;
-        blackCanCastleKingSide = blackCanCastleQueenSide = false;
-        
-        while(moveSet[index] != ' ') {
-            switch(moveSet[index]) {
-                case 'K': whiteCanCastleKingSide = true; break;
-                case 'Q': whiteCanCastleQueenSide = true; break;
-                case 'k': blackCanCastleKingSide = true; break;
-                case 'q': blackCanCastleQueenSide = true; break;
-                case '-': break;
-            }
-            index++;
-        }
-        index++; 
-        
-        if(moveSet[index] == '-') {
-            enPassantSquare = -1;
-            index++;
-        } else {
-            int file = moveSet[index] - 'a';
-            int rank = '8' - moveSet[index + 1];
-            enPassantSquare = rank * 8 + file;
-            index += 2;
-        }
-        index++; 
-        
-        halfmoveClock = 0;
-        while(moveSet[index] != ' ') {
-            halfmoveClock = halfmoveClock * 10 + (moveSet[index] - '0');
-            index++;
-        }
-        index++; 
-        fullmoveNumber = 0;
-        while(index < moveSet.length() && isdigit(moveSet[index])) {
-            fullmoveNumber = fullmoveNumber * 10 + (moveSet[index] - '0');
-            index++;
-        }
-    }
-
-    void outputFen() {
-        std::string fen = "";
-
-        // 1. Piece Placement
-        for(int rank = 0; rank < 8; rank++) { // From rank 8 to 1
-            int emptyCount = 0;
-            for(int file = 0; file < 8; file++) { // From file a to h
-                int square = (rank) * 8 + file;
-                char piece = '-';
-
-                if(whitePawn & (1ULL << square)) piece = 'P';
-                else if(whiteRook & (1ULL << square)) piece = 'R';
-                else if(whiteBishop & (1ULL << square)) piece = 'B';
-                else if(whiteKnight & (1ULL << square)) piece = 'N';
-                else if(whiteQueen & (1ULL << square)) piece = 'Q';
-                else if(whiteKing & (1ULL << square)) piece = 'K';
-
-                else if(blackPawn & (1ULL << square)) piece = 'p';
-                else if(blackRook & (1ULL << square)) piece = 'r';
-                else if(blackBishop & (1ULL << square)) piece = 'b';
-                else if(blackKnight & (1ULL << square)) piece = 'n';
-                else if(blackQueen & (1ULL << square)) piece = 'q';
-                else if(blackKing & (1ULL << square)) piece = 'k';
-
-                if(piece == '-') {
-                    emptyCount++;
-                }
-                else {
-                    if(emptyCount > 0) {
-                        fen += std::to_string(emptyCount);
-                        emptyCount = 0;
-                    }
-                    fen += piece;
-                }
-            }
-            if(emptyCount > 0) {
-                fen += std::to_string(emptyCount);
-            }
-            if(rank != 7) {
-                fen += '/';
-            }
-        }
-
-        // // 2. Active Color
-        // fen += ' ';
-        // fen += (turn) ? 'w' : 'b';
-
-        // // 3. Castling Availability
-        // fen += ' ';
-        // std::string castling = "";
-        // if(whiteCanCastleKingSide) castling += 'K';
-        // if(whiteCanCastleQueenSide) castling += 'Q';
-        // if(blackCanCastleKingSide) castling += 'k';
-        // if(blackCanCastleQueenSide) castling += 'q';
-        // fen += (castling.empty()) ? "-" : castling;
-
-        // // 4. En Passant Target Square
-        // fen += ' ';
-        // fen += (enPassantSquare == -1) ? '-' : indexToAlgebraic(enPassantSquare)[0];
-
-        // // 5. Halfmove Clock
-        // fen += ' ';
-        // fen += std::to_string(halfmoveClock);
-
-        // // 6. Fullmove Number
-        // fen += ' ';
-        // fen += std::to_string(fullmoveNumber);
-
-        // // Output the FEN string
-        std::cout << fen << "\n";
-    }
+    void outputFen();
 
     void generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount);
 
     void printMoves(Move moveArray[], int moveCount);
 
-    long perft(int depth, bool isWhite);
+    long perft(int depth, bool isWhite, int initialDepth);
     
     void make_move(Move& mv);
 
     void unmake_move(Move & mv);
+
+    void order_moves(Move *moves, int moveCount);
+
+    int evaluateBoard();
+
+    int alphaBeta(bool isWhite, int depth, int alpha, int beta);
+
+    long perft2(int depth, bool isWhite);
+
+    // new stuff added, remove if engine breaks
+
+    bool isSquareAttacked(int square, bool byWhite);
+
+    bool isInCheck(bool isWhite);
+
+    bool isMoveLegal(Move &mv);
+
+
+
 };
+
+void Board::setupGameFromFEN(string moveSet) {
+    // Reset all bitboards
+    whitePawn = whiteRook = whiteBishop = whiteKnight = whiteQueen = whiteKing = 0;
+    blackPawn = blackRook = blackBishop = blackKnight = blackQueen = blackKing = 0;
+    
+    for(int i = 0; i < 64; i++) allPieces[i] = PIECE_NONE;
+
+    int i = 0, j = 0, index = 0;
+    
+    // Parse piece placement
+    for(char c: moveSet) {
+        index++;
+        int set = i*8 + j;
+        if(c == ' ') break;
+        if(c == '/') {
+            i++;
+            j = 0;
+            continue;
+        }
+        else if(c == 'r') {
+            blackRook |= (1LL << set);
+            allPieces[set] = COLOR_BLACK | PIECE_ROOK;
+        }
+        else if(c == 'n') {
+            blackKnight |= (1LL << set);
+            allPieces[set] = COLOR_BLACK | PIECE_KNIGHT;
+        }
+        else if(c == 'b') {
+            blackBishop |= (1LL << set);
+            allPieces[set] = COLOR_BLACK | PIECE_BISHOP;
+        }
+        else if(c == 'q') {
+            blackQueen |= (1LL << set);
+            allPieces[set] = COLOR_BLACK | PIECE_QUEEN;
+        }
+        else if(c == 'k') {
+            blackKing |= (1LL << set);
+            allPieces[set] = COLOR_BLACK | PIECE_KING;
+        }
+        else if(c == 'p') {
+            blackPawn |= (1LL << set);
+            allPieces[set] = COLOR_BLACK | PIECE_PAWN;
+        }
+        else if(c == 'R') {
+            whiteRook |= (1LL << set);
+            allPieces[set] = COLOR_WHITE | PIECE_ROOK;
+        }
+        else if(c == 'N') {
+            whiteKnight |= (1LL << set);
+            allPieces[set] = COLOR_WHITE | PIECE_KNIGHT;
+        }
+        else if(c == 'B') {
+            whiteBishop |= (1LL << set);
+            allPieces[set] = COLOR_WHITE | PIECE_BISHOP;
+        }
+        else if(c == 'Q') {
+            whiteQueen |= (1LL << set);
+            allPieces[set] = COLOR_WHITE | PIECE_QUEEN;
+        }
+        else if(c == 'K') {
+            whiteKing |= (1LL << set);
+            allPieces[set] = COLOR_WHITE | PIECE_KING;
+        }
+        else if(c == 'P') {
+            whitePawn |= (1LL << set);
+            allPieces[set] = COLOR_WHITE | PIECE_PAWN;
+        }
+        else if(isdigit(c)) {
+            j += (c - '0') - 1;
+        }
+        j++;
+    }
+    whitePieces = whiteBishop | whiteKing | whitePawn | whiteKnight | whiteQueen | whiteRook;
+    blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
+    
+    index += 2; 
+    
+    whiteCanCastleKingSide = whiteCanCastleQueenSide = false;
+    blackCanCastleKingSide = blackCanCastleQueenSide = false;
+    
+    while(moveSet[index] != ' ') {
+        switch(moveSet[index]) {
+            case 'K': whiteCanCastleKingSide = true; break;
+            case 'Q': whiteCanCastleQueenSide = true; break;
+            case 'k': blackCanCastleKingSide = true; break;
+            case 'q': blackCanCastleQueenSide = true; break;
+            case '-': break;
+        }
+        index++;
+    }
+    index++; 
+    
+    if(moveSet[index] == '-') {
+        enPassantSquare = -1;
+        index++;
+    } else {
+        int file = moveSet[index] - 'a';
+        int rank = '8' - moveSet[index + 1];
+        enPassantSquare = rank * 8 + file;
+        index += 2;
+    }
+    index++; 
+    
+    halfmoveClock = 0;
+    while(moveSet[index] != ' ') {
+        halfmoveClock = halfmoveClock * 10 + (moveSet[index] - '0');
+        index++;
+    }
+    index++; 
+    fullmoveNumber = 0;
+    while(index < moveSet.length() && isdigit(moveSet[index])) {
+        fullmoveNumber = fullmoveNumber * 10 + (moveSet[index] - '0');
+        index++;
+    }
+}
+
+void Board::printGame(){
+    for(int i = 0; i < 8; i++){
+        cout << 8-i << "  ";
+        for(int j = 0; j < 8; j++){
+            int mask = i*8 + j;
+            string piece = ".";
+            if((whiteQueen >> mask) & 1) piece = "♛";
+            else if((whitePawn >> mask) & 1) piece = "♟";
+            else if((whiteBishop >> mask) & 1) piece = "♝";
+            else if((whiteKing >> mask) & 1) piece = "♚";
+            else if((whiteRook >> mask) & 1) piece = "♜";
+            else if((whiteKnight >> mask) & 1) piece = "♞";
+
+            else if((blackQueen >> mask) & 1) piece = "♕";
+            else if((blackPawn >> mask) & 1) piece = "♙";
+            else if((blackBishop >> mask) & 1) piece = "♗";
+            else if((blackKing >> mask) & 1) piece = "♔";
+            else if((blackRook >> mask) & 1) piece = "♖";
+            else if((blackKnight >> mask) & 1) piece = "♘";
+
+            cout << piece << " ";
+        }
+        cout << "\n";
+    }
+    cout << "\n   A B C D E F G H\n";
+}
+
+void Board::outputFen(){
+    string fen = "";
+
+    // 1. Piece Placement
+    for(int rank = 0; rank < 8; rank++) { // From rank 8 to 1
+        int emptyCount = 0;
+        for(int file = 0; file < 8; file++) { // From file a to h
+            int square = (rank) * 8 + file;
+            char piece = '-';
+
+            if(whitePawn & (1ULL << square)) piece = 'P';
+            else if(whiteRook & (1ULL << square)) piece = 'R';
+            else if(whiteBishop & (1ULL << square)) piece = 'B';
+            else if(whiteKnight & (1ULL << square)) piece = 'N';
+            else if(whiteQueen & (1ULL << square)) piece = 'Q';
+            else if(whiteKing & (1ULL << square)) piece = 'K';
+
+            else if(blackPawn & (1ULL << square)) piece = 'p';
+            else if(blackRook & (1ULL << square)) piece = 'r';
+            else if(blackBishop & (1ULL << square)) piece = 'b';
+            else if(blackKnight & (1ULL << square)) piece = 'n';
+            else if(blackQueen & (1ULL << square)) piece = 'q';
+            else if(blackKing & (1ULL << square)) piece = 'k';
+
+            if(piece == '-') {
+                emptyCount++;
+            }
+            else {
+                if(emptyCount > 0) {
+                    fen += to_string(emptyCount);
+                    emptyCount = 0;
+                }
+                fen += piece;
+            }
+        }
+        if(emptyCount > 0) {
+            fen += to_string(emptyCount);
+        }
+        if(rank != 7) {
+            fen += '/';
+        }
+    }
+
+    // // 2. Active Color
+    // fen += ' ';
+    // fen += (turn) ? 'w' : 'b';
+
+    // // 3. Castling Availability
+    // fen += ' ';
+    // string castling = "";
+    // if(whiteCanCastleKingSide) castling += 'K';
+    // if(whiteCanCastleQueenSide) castling += 'Q';
+    // if(blackCanCastleKingSide) castling += 'k';
+    // if(blackCanCastleQueenSide) castling += 'q';
+    // fen += (castling.empty()) ? "-" : castling;
+
+    // // 4. En Passant Target Square
+    // fen += ' ';
+    // fen += (enPassantSquare == -1) ? '-' : indexToAlgebraic(enPassantSquare)[0];
+
+    // // 5. Halfmove Clock
+    // fen += ' ';
+    // fen += to_string(halfmoveClock);
+
+    // // 6. Fullmove Number
+    // fen += ' ';
+    // fen += to_string(fullmoveNumber);
+
+    // // Output the FEN string
+    cout << fen << "\n";
+}
 
 void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
 
     moveCount = 0;
+
     uint64_t ownPieces = isWhite ? whitePieces : blackPieces;
     uint64_t enemyPieces = isWhite ? blackPieces : whitePieces;
 
@@ -370,15 +441,13 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
             knight_attack_bb &= knight_attack_bb - 1;
             uint64_t targetMask = (1ULL << target);
             if(ownPieces & targetMask) continue;
-            else if(enemyPieces & targetMask) {
-                moveArray[moveCount++] = Move(isWhite, PIECE_KNIGHT, single_knight, target, 1, '-');
+            if(allPieces[target] != PIECE_NONE && ((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK))) {
+                moveArray[moveCount++] = Move(isWhite, PIECE_KNIGHT, single_knight, target, (allPieces[target] & PIECE_MASK), '-');
             } else {
-                moveArray[moveCount++] = Move(isWhite, PIECE_KNIGHT, single_knight, target, -1, '-');
+                moveArray[moveCount++] = Move(isWhite, PIECE_KNIGHT, single_knight, target, PIECE_NONE, '-');
             }
         }
     }
-    const int DIRECTIONS_STRAIGHT[4] = {8, -8, 1, -1}; // down, up, right, left
-    const int DIRECTIONS_DIAGONAL[4] = {9, -9, 7, -7}; // bottom-right, top-left, bottom-left, top-right
 
     uint64_t rooks = isWhite ? whiteRook : blackRook;
     while(rooks && moveCount < 256) {
@@ -394,11 +463,12 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 uint64_t targetMask = 1ULL << target;
                 if(ownPieces & targetMask) {
                     break;
-                } else if(enemyPieces & targetMask) {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_ROOK, single_rook, target, 1, '-');
+                } 
+                if(allPieces[target] != PIECE_NONE && ((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK))) {
+                    moveArray[moveCount++] = Move(isWhite, PIECE_ROOK, single_rook, target, (allPieces[target] & PIECE_MASK), '-');
                     break;
                 } else {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_ROOK, single_rook, target, -1, '-');
+                    moveArray[moveCount++] = Move(isWhite, PIECE_ROOK, single_rook, target, PIECE_NONE, '-');
                 }
                 if(moveCount >= 256) break;
             }
@@ -407,23 +477,24 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
 
     uint64_t bishops = isWhite ? whiteBishop : blackBishop;
     while(bishops && moveCount < 256) {
-        int bishopSquare = __builtin_ctzll(bishops);
+        int single_bishop = __builtin_ctzll(bishops);
         bishops &= bishops - 1; 
         for(int dir = 0; dir < 4; dir++) {
-            int targetSquare = bishopSquare;
+            int target = single_bishop;
             while(true) {
-                targetSquare += DIRECTIONS_DIAGONAL[dir];
-                if(targetSquare < 0 || targetSquare > 63) break;
-                if((DIRECTIONS_DIAGONAL[dir] == 9 || DIRECTIONS_DIAGONAL[dir] == -7) && (targetSquare % 8 == 0)) break; // top-right wrapping
-                if((DIRECTIONS_DIAGONAL[dir] == -9 || DIRECTIONS_DIAGONAL[dir] == 7) && ((targetSquare + 1) % 8 == 0)) break; // top-left wrapping
-                uint64_t targetMask = 1ULL << targetSquare;
+                target += DIRECTIONS_DIAGONAL[dir];
+                if(target < 0 || target > 63) break;
+                if((DIRECTIONS_DIAGONAL[dir] == 9 || DIRECTIONS_DIAGONAL[dir] == -7) && (target % 8 == 0)) break; // top-right wrapping
+                if((DIRECTIONS_DIAGONAL[dir] == -9 || DIRECTIONS_DIAGONAL[dir] == 7) && ((target + 1) % 8 == 0)) break; // top-left wrapping
+                uint64_t targetMask = 1ULL << target;
                 if(ownPieces & targetMask) {
                     break;
-                } else if(enemyPieces & targetMask) {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_BISHOP, bishopSquare, targetSquare, 1, '-');
-                    break; 
+                } 
+                else if(allPieces[target] != PIECE_NONE && ((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE: COLOR_BLACK))) {
+                    moveArray[moveCount++] = Move(isWhite, PIECE_BISHOP, single_bishop, target, (allPieces[target] & PIECE_MASK), '-');
+                    break;
                 } else {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_BISHOP, bishopSquare, targetSquare, -1, '-');
+                    moveArray[moveCount++] = Move(isWhite, PIECE_BISHOP, single_bishop, target, PIECE_NONE, '-');
                 }
                 if(moveCount >= 256) break;
             }
@@ -437,26 +508,27 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
         int queenSquare = __builtin_ctzll(queens);
         queens &= queens - 1;
         for(int dir = 0; dir < 8; dir++) {
-            int targetSquare = queenSquare;
+            int target = queenSquare;
             while(true) {
-                targetSquare += DIRECTIONS_QUEEN[dir];
-                if(targetSquare < 0 || targetSquare > 63) break;
-                if((DIRECTIONS_QUEEN[dir] == 1 && (targetSquare % 8 == 0)) || // right wrapping
-                   (DIRECTIONS_QUEEN[dir] == -1 && ((targetSquare + 1) % 8 == 0)) || // left wrapping
-                   (DIRECTIONS_QUEEN[dir] == 9 && (targetSquare % 8 == 0)) ||  // NE wrapping
-                   (DIRECTIONS_QUEEN[dir] == -7 && (targetSquare % 8 == 0)) || // NE wrapping
-                   (DIRECTIONS_QUEEN[dir] == -9 && ((targetSquare + 1) % 8 == 0)) || // NW wrapping
-                   (DIRECTIONS_QUEEN[dir] == 7 && ((targetSquare + 1) % 8 == 0))) { // SW wrapping
+                target += DIRECTIONS_QUEEN[dir];
+                if(target < 0 || target > 63) break;
+                if((DIRECTIONS_QUEEN[dir] == 1 && (target % 8 == 0)) || // right wrapping
+                   (DIRECTIONS_QUEEN[dir] == -1 && ((target + 1) % 8 == 0)) || // left wrapping
+                   (DIRECTIONS_QUEEN[dir] == 9 && (target % 8 == 0)) ||  // NE wrapping
+                   (DIRECTIONS_QUEEN[dir] == -7 && (target % 8 == 0)) || // NE wrapping
+                   (DIRECTIONS_QUEEN[dir] == -9 && ((target + 1) % 8 == 0)) || // NW wrapping
+                   (DIRECTIONS_QUEEN[dir] == 7 && ((target + 1) % 8 == 0))) { // SW wrapping
                     break;
                 }
-                uint64_t targetMask = 1ULL << targetSquare;
+                uint64_t targetMask = 1ULL << target;
                 if(ownPieces & targetMask) {
                     break;
-                } else if(enemyPieces & targetMask) {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_QUEEN, queenSquare, targetSquare, 1, '-');
-                    break; 
+                } 
+                else if(allPieces[target] != PIECE_NONE && ((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK))) {
+                    moveArray[moveCount++] = Move(isWhite, PIECE_QUEEN, queenSquare, target, (allPieces[target] & PIECE_MASK), '-');
+                    break;
                 } else {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_QUEEN, queenSquare, targetSquare, -1, '-');
+                    moveArray[moveCount++] = Move(isWhite, PIECE_QUEEN, queenSquare, target, PIECE_NONE, '-');
                 }
                 if(moveCount >= 256) break;
             }
@@ -469,20 +541,21 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
         int kingSquare = __builtin_ctzll(kings);
         kings &= kings-1;
         for(int dir = 0; dir < 8; dir++) {
-            int targetSquare = kingSquare + DIRECTIONS_KING[dir];
-            if(targetSquare < 0 || targetSquare > 63) continue;
+            int target = kingSquare + DIRECTIONS_KING[dir];
+            if(target < 0 || target > 63) continue;
             if((DIRECTIONS_KING[dir] == 1 || DIRECTIONS_KING[dir] == -7 || DIRECTIONS_KING[dir] == 9)&& (kingSquare % 8 == 7)) continue;   // East wrapping
             if((DIRECTIONS_KING[dir] == -1 || DIRECTIONS_KING[dir] == -9 || DIRECTIONS_KING[dir] == +7) && (kingSquare % 8 == 0)) continue; // West wrapping
             if((DIRECTIONS_KING[dir] == -9 || DIRECTIONS_KING[dir] == -7 || DIRECTIONS_KING[dir] == -8) && (kingSquare < 8)) continue; // North wrapping
             if((DIRECTIONS_KING[dir] == 9 || DIRECTIONS_KING[dir] == 8 || DIRECTIONS_KING[dir] == 7) && (kingSquare > 55)) continue; // South wrapping
 
-            uint64_t targetMask = 1ULL << targetSquare;
+            uint64_t targetMask = 1ULL << target;
             if(ownPieces & targetMask) {
                 continue;
-            } else if(enemyPieces & targetMask) {
-                moveArray[moveCount++] = Move(isWhite, PIECE_KING, kingSquare, targetSquare, 1, '-');
+            } 
+            else if(allPieces[target] != PIECE_NONE && ((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK))) {
+                moveArray[moveCount++] = Move(isWhite, PIECE_KING, kingSquare, target, (allPieces[target] & PIECE_MASK), '-');
             } else {
-                moveArray[moveCount++] = Move(isWhite, PIECE_KING, kingSquare, targetSquare, -1, '-');
+                moveArray[moveCount++] = Move(isWhite, PIECE_KING, kingSquare, target, PIECE_NONE, '-');
             }
 
             if(moveCount >= 256) break;
@@ -493,59 +566,114 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
 
     uint64_t pawns = isWhite ? whitePawn : blackPawn;
     while(pawns && moveCount < 256) {
-        int pawnSquare = __builtin_ctzll(pawns);
-        pawns &= pawns - 1;
-
-        // Single forward move
-        int forward = isWhite ? pawnSquare - 8 : pawnSquare + 8;
-        if(forward >= 0 && forward < 64 && !((whitePieces | blackPieces) & (1ULL << forward))) {
-            // Promotion
-            if((isWhite && forward <= 7) || (!isWhite && forward >= 65)) {
-                moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, pawnSquare, forward, -1, 'Q');
+        int single_pawn = __builtin_ctzll(pawns);
+        pawns &= pawns -1;
+        if(isWhite) {
+            // Single push
+            int target = single_pawn - 8;
+            if(target >= 0 && allPieces[target] == PIECE_NONE) {
+                if(target < 8) { // Promotion
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, PIECE_NONE, 'Q');
+                    // Add other promotion pieces
+                } else {
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, PIECE_NONE, '-');
+                }
             }
-            else {
-                moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, pawnSquare, forward, -1, '-');
+            
+            if(((1ULL << single_pawn) & RANK_2) && target >= 24) {
+                target = single_pawn - 16;
+                if(allPieces[target] == PIECE_NONE && allPieces[single_pawn - 8] == PIECE_NONE) {
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, PIECE_NONE, '-');
+                }
+            }
+            // capture left
+            if((1ULL << single_pawn) & ~A_FILE) {
+                target = single_pawn - 9;
+                if((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK) && (allPieces[target] & PIECE_MASK) != PIECE_NONE){
+                    // piece captured
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, (allPieces[target] & PIECE_MASK), '-');
+                }
+            }
+            // capture right
+            if((1ULL << single_pawn) & ~H_FILE) {
+                target = single_pawn - 7;
+                if((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK) && (allPieces[target] & PIECE_MASK) != PIECE_NONE){
+                    // piece captured
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, (allPieces[target] & PIECE_MASK), '-');
+                }
             }
 
-            // Double forward 
-            if((isWhite && pawnSquare >= 48 && pawnSquare < 56) || (!isWhite && pawnSquare >= 8 && pawnSquare < 16)) {
-                int doubleForward = isWhite ? pawnSquare - 16 : pawnSquare + 16;
-                if(!((whitePieces | blackPieces) & (1ULL << doubleForward))) {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, pawnSquare, doubleForward, -1, '-');
+            // En passant
+            if(enPassantSquare != -1) {
+                if((single_pawn - 7 == enPassantSquare && (1ULL << single_pawn) & ~H_FILE) ||
+                (single_pawn - 9 == enPassantSquare && (1ULL << single_pawn) & ~A_FILE)) {
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, enPassantSquare, PIECE_PAWN, 'e');
+                }
+            }
+        } else {
+            // single push
+            int target = single_pawn + 8;
+            if(target >= 0 && allPieces[target] == PIECE_NONE) {
+                moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, PIECE_NONE, '-');
+            }
+            // double push
+            if(((1ULL << single_pawn) & RANK_7) && target <= 39) {
+                target = single_pawn + 16;
+                if(allPieces[target] == PIECE_NONE && allPieces[single_pawn + 8] == PIECE_NONE) {
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, PIECE_NONE, '-');
+                }
+            }
+ 
+
+            // capture left
+            if((1ULL << single_pawn) & ~A_FILE) {
+                target = single_pawn + 7;
+                if((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK) && (allPieces[target] & PIECE_MASK) != PIECE_NONE){
+                    // piece captured
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, (allPieces[target] & PIECE_MASK), '-');
+                }
+            }
+            // capture right
+            if((1ULL << single_pawn) & ~H_FILE) {
+                target = single_pawn + 9;
+                if((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK) && (allPieces[target] & PIECE_MASK) != PIECE_NONE){
+                    // piece captured
+                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, single_pawn, target, (allPieces[target] & PIECE_MASK), '-');
                 }
             }
         }
-
-        // Capture left
-        int captureLeft = isWhite ? pawnSquare - 9 : pawnSquare + 7;
-        if((isWhite && (pawnSquare % 8 != 0)) || (!isWhite && (pawnSquare % 8 != 7))) {
-            if(captureLeft >= 0 && captureLeft < 64 && (isWhite ? blackPieces : whitePieces) & (1ULL << captureLeft)) {
-                // Promotion
-                if((isWhite && captureLeft >= 56) || (!isWhite && captureLeft < 8)) {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, pawnSquare, captureLeft, -1, 'Q');
-                }
-                else {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, pawnSquare, captureLeft, -1, '-');
-                }
-            }
-        }
-
-        // Capture right
-        int captureRight = isWhite ? pawnSquare - 7 : pawnSquare + 9;
-        if((isWhite && (pawnSquare % 8 != 7)) || (!isWhite && (pawnSquare % 8 != 0))) {
-            if(captureRight >= 0 && captureRight < 64 && (isWhite ? blackPieces : whitePieces) & (1ULL << captureRight)) {
-                // Promotion
-                if((isWhite && captureRight >= 56) || (!isWhite && captureRight < 8)) {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, pawnSquare, captureRight, -1, 'Q');
-                }
-                else {
-                    moveArray[moveCount++] = Move(isWhite, PIECE_PAWN, pawnSquare, captureRight, -1, '-');
-                }
-            }
-        }
-
-        if(moveCount >= 256) break;
     }
+    int legalMoveCount = 0;
+    for (int i = 0; i < moveCount; i++)
+    {
+        if(isMoveLegal(moveArray[i])) {
+            if(legalMoveCount != i) {
+                moveArray[legalMoveCount] = moveArray[i];
+            }
+            legalMoveCount++;
+        }
+    }
+    moveCount = legalMoveCount;
+    
+}
+
+long Board::perft2(int depth, bool isWhite) {
+    if (depth == 0)
+        return 1;
+
+    long nodes = 0;
+    Move moves[256];
+    int moveCount = 0;
+
+    generatePieceMoves(isWhite, moves, moveCount);
+
+    for (int i = 0; i < moveCount; i++) {
+        make_move(moves[i]);
+        nodes += perft2(depth - 1, !isWhite);
+        unmake_move(moves[i]);
+    }
+
+    return nodes;
 }
 
 void Board::printMoves(Move moveArray[], int moveCount) {
@@ -556,9 +684,117 @@ void Board::printMoves(Move moveArray[], int moveCount) {
     }
 }
 
-long Board::perft(int depth, bool isWhite) {
+void Board::make_move(Move &mv) {
+    bool side = mv.isWhite;
+
+    // Remove captured piece if any
+    if(mv.pieceCaptured != PIECE_NONE) {
+        uint64_t* capBoard = nullptr;
+        switch(mv.pieceCaptured) {
+            case PIECE_PAWN:   capBoard = side ? &blackPawn   : &whitePawn;   break;
+            case PIECE_ROOK:   capBoard = side ? &blackRook   : &whiteRook;   break;
+            case PIECE_BISHOP: capBoard = side ? &blackBishop : &whiteBishop; break;
+            case PIECE_KNIGHT: capBoard = side ? &blackKnight : &whiteKnight; break;
+            case PIECE_QUEEN:  capBoard = side ? &blackQueen  : &whiteQueen;  break;
+            case PIECE_KING:   capBoard = side ? &blackKing   : &whiteKing;   break;
+        }
+        if(capBoard) {
+            *capBoard &= ~(1ULL << mv.endSquare);
+            // Update combined pieces
+            if(side) {
+                blackPieces &= ~(1ULL << mv.endSquare);
+            } else {
+                whitePieces &= ~(1ULL << mv.endSquare);
+            }
+        }
+    }
+
+    // Move the piece
+    uint64_t* movBoard = nullptr;
+    switch(mv.pieceType) {
+        case PIECE_PAWN:   movBoard = side ? &whitePawn   : &blackPawn;   break;
+        case PIECE_ROOK:   movBoard = side ? &whiteRook   : &blackRook;   break;
+        case PIECE_BISHOP: movBoard = side ? &whiteBishop : &blackBishop; break;
+        case PIECE_KNIGHT: movBoard = side ? &whiteKnight : &blackKnight; break;
+        case PIECE_QUEEN:  movBoard = side ? &whiteQueen  : &blackQueen;  break;
+        case PIECE_KING:   movBoard = side ? &whiteKing   : &blackKing;   break;
+    }
+    if(movBoard) {
+        *movBoard &= ~(1ULL << mv.startSquare);
+        *movBoard |= (1ULL << mv.endSquare);
+        // Update combined pieces
+        if(side) {
+            whitePieces &= ~(1ULL << mv.startSquare);
+            whitePieces |= (1ULL << mv.endSquare);
+        } else {
+            blackPieces &= ~(1ULL << mv.startSquare);
+            blackPieces |= (1ULL << mv.endSquare);
+        }
+    }
+
+    allPieces[mv.startSquare] = PIECE_NONE;
+    allPieces[mv.endSquare] = side ? (COLOR_WHITE | mv.pieceType) : (COLOR_BLACK | mv.pieceType);
+}
+
+void Board::unmake_move(Move &mv) {
+    bool side = mv.isWhite;
+
+    // Move piece back
+    uint64_t* movBoard = nullptr;
+    switch(mv.pieceType) {
+        case PIECE_PAWN:   movBoard = side ? &whitePawn   : &blackPawn;   break;
+        case PIECE_ROOK:   movBoard = side ? &whiteRook   : &blackRook;   break;
+        case PIECE_BISHOP: movBoard = side ? &whiteBishop : &blackBishop; break;
+        case PIECE_KNIGHT: movBoard = side ? &whiteKnight : &blackKnight; break;
+        case PIECE_QUEEN:  movBoard = side ? &whiteQueen  : &blackQueen;  break;
+        case PIECE_KING:   movBoard = side ? &whiteKing   : &blackKing;   break;
+    }
+    if(movBoard) {
+        *movBoard &= ~(1ULL << mv.endSquare);
+        *movBoard |= (1ULL << mv.startSquare);
+        // Update combined pieces
+        if(side) {
+            whitePieces &= ~(1ULL << mv.endSquare);
+            whitePieces |= (1ULL << mv.startSquare);
+        } else {
+            blackPieces &= ~(1ULL << mv.endSquare);
+            blackPieces |= (1ULL << mv.startSquare);
+        }
+    }
+
+    // Restore captured piece
+    if(mv.pieceCaptured != PIECE_NONE) {
+        uint64_t* capBoard = nullptr;
+        switch(mv.pieceCaptured) {
+            case PIECE_PAWN:   capBoard = side ? &blackPawn   : &whitePawn;   break;
+            case PIECE_ROOK:   capBoard = side ? &blackRook   : &whiteRook;   break;
+            case PIECE_BISHOP: capBoard = side ? &blackBishop : &whiteBishop; break;
+            case PIECE_KNIGHT: capBoard = side ? &blackKnight : &whiteKnight; break;
+            case PIECE_QUEEN:  capBoard = side ? &blackQueen  : &whiteQueen;  break;
+            case PIECE_KING:   capBoard = side ? &blackKing   : &whiteKing;   break;
+        }
+        if(capBoard) {
+            *capBoard |= (1ULL << mv.endSquare);
+            // Update combined pieces
+            if(side) {
+                blackPieces |= (1ULL << mv.endSquare);
+            } else {
+                whitePieces |= (1ULL << mv.endSquare);
+            }
+        }
+    }
+
+    allPieces[mv.startSquare] = side ? (COLOR_WHITE | mv.pieceType) : (COLOR_BLACK | mv.pieceType);
+    allPieces[mv.endSquare] = mv.pieceCaptured != PIECE_NONE ? 
+        (side ? (COLOR_BLACK | mv.pieceCaptured) : (COLOR_WHITE | mv.pieceCaptured)) : PIECE_NONE;
+}
+
+long Board::perft(int depth, bool isWhite, int initialDepth = -1) {
+    if (initialDepth == -1) {
+        initialDepth = depth;
+    }
+
     if (depth == 0) {
-        // printGame();
         return 1;
     }
 
@@ -567,236 +803,229 @@ long Board::perft(int depth, bool isWhite) {
     generatePieceMoves(isWhite, moveArray, moveCount);
 
     long nodes = 0;
-    for (int i = 0; i < moveCount; i++) {
-        make_move(moveArray[i]);
-        nodes += perft(depth - 1, !isWhite);
-        unmake_move(moveArray[i]);
+
+    // Only print moves at root level
+    if (depth == initialDepth) {
+        for (int i = 0; i < moveCount; i++) {
+            make_move(moveArray[i]);
+            long childNodes = perft(depth - 1, !isWhite, initialDepth);
+            string moveStr = indexToAlgebraic(moveArray[i].startSquare) + 
+                           indexToAlgebraic(moveArray[i].endSquare);
+            cout << moveStr << ": " << childNodes << "\n";
+            nodes += childNodes;
+            unmake_move(moveArray[i]);
+        }
+    } else {
+        // Faster path for non-root nodes
+        for (int i = 0; i < moveCount; i++) {
+            make_move(moveArray[i]);
+            nodes += perft(depth - 1, !isWhite, initialDepth);
+            unmake_move(moveArray[i]);
+        }
     }
 
     return nodes;
 }
 
-void Board::make_move(Move &mv) {
-    // check which piece to move
-    bool isWhite = mv.isWhite;
-    uint64_t *currentPiece;
-    switch(mv.pieceType) {
-        case PIECE_PAWN:
-            currentPiece = isWhite ? &whitePawn : &blackPawn;
-            break;
-        case PIECE_ROOK:
-            currentPiece = isWhite ? &whiteRook : &blackRook;
-            break;
-        case PIECE_BISHOP:
-            currentPiece = isWhite ? &whiteBishop : &blackBishop;
-            break;
-        case PIECE_KNIGHT:
-            currentPiece = isWhite ? &whiteKnight : &blackKnight;
-            break;
-        case PIECE_QUEEN:
-            currentPiece = isWhite ? &whiteQueen : &blackQueen;
-            break;
-        case PIECE_KING:
-            currentPiece = isWhite ? &whiteKing : &blackKing;
-            break;
-    }
-    // move it
-    *currentPiece &= ~(1ULL << mv.startSquare);
-    *currentPiece |= (1ULL << mv.endSquare);
+int Board::evaluateBoard() {
+    const int PAWN_VALUE = 100;
+    const int BISHOP_VALUE = 300;
+    const int KNIGHT_VALUE = 300;
+    const int ROOK_VALUE = 500;
+    const int QUEEN_VALUE = 900;
+
+    int score = 0;
+
+    score += __builtin_popcount(whitePawn) * PAWN_VALUE;
+    score += __builtin_popcount(whiteBishop) * BISHOP_VALUE;
+    score += __builtin_popcount(whiteKnight) * KNIGHT_VALUE;
+    score += __builtin_popcount(whiteRook) * ROOK_VALUE;
+    score += __builtin_popcount(whiteQueen) * QUEEN_VALUE;
+
+    score -= __builtin_popcount(blackPawn) * PAWN_VALUE;
+    score -= __builtin_popcount(blackBishop) * BISHOP_VALUE;
+    score -= __builtin_popcount(blackKnight) * KNIGHT_VALUE;
+    score -= __builtin_popcount(blackRook) * ROOK_VALUE;
+    score -= __builtin_popcount(blackQueen) * QUEEN_VALUE;
 
 
-    int capturedPiece = -1;
-    if (isWhite) {
-        if (blackPawn & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_PAWN;
-            blackPawn &= ~(1ULL << mv.endSquare);
-        } else if (blackRook & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_ROOK;
-            blackRook &= ~(1ULL << mv.endSquare);
-        } else if (blackBishop & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_BISHOP;
-            blackBishop &= ~(1ULL << mv.endSquare);
-        } else if (blackKnight & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_KNIGHT;
-            blackKnight &= ~(1ULL << mv.endSquare);
-        } else if (blackQueen & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_QUEEN;
-            blackQueen &= ~(1ULL << mv.endSquare);
-        } else if (blackKing & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_KING;
-            blackKing &= ~(1ULL << mv.endSquare);
-        }
-    } else {
-        if (whitePawn & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_PAWN;
-            whitePawn &= ~(1ULL << mv.endSquare);
-        } else if (whiteRook & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_ROOK;
-            whiteRook &= ~(1ULL << mv.endSquare);
-        } else if (whiteBishop & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_BISHOP;
-            whiteBishop &= ~(1ULL << mv.endSquare);
-        } else if (whiteKnight & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_KNIGHT;
-            whiteKnight &= ~(1ULL << mv.endSquare);
-        } else if (whiteQueen & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_QUEEN;
-            whiteQueen &= ~(1ULL << mv.endSquare);
-        } else if (whiteKing & (1ULL << mv.endSquare)) {
-            capturedPiece = PIECE_KING;
-            whiteKing &= ~(1ULL << mv.endSquare);
-        }
-    }
-    if(capturedPiece != -1) mv.pieceCaptured = capturedPiece;
-    // pawn promotions
-    if(mv.promotion != '-') {
-        if(mv.pieceType == PIECE_PAWN) {
-            *currentPiece &= ~(1ULL << mv.endSquare);
-            switch(mv.promotion) {
-                case 'Q':
-                    if(isWhite) {
-                        whiteQueen |= (1ULL << mv.endSquare);
-                    } else {
-                        blackQueen |= (1ULL << mv.endSquare);
-                    }
-                    break;
-                case 'R':
-                    if(isWhite) {
-                        whiteRook |= (1ULL << mv.endSquare);
-                    } else {
-                        blackRook |= (1ULL << mv.endSquare);
-                    }
-                    break;
-                case 'B':
-                    if(isWhite) {
-                        whiteBishop |= (1ULL << mv.endSquare);
-                    } else {
-                        blackBishop |= (1ULL << mv.endSquare);
-                    }
-                    break;
-                case 'N':
-                    if(isWhite) {
-                        whiteKnight |= (1ULL << mv.endSquare);
-                    } else {
-                        blackKnight |= (1ULL << mv.endSquare);
-                    }
-                    break;
+    // new stuff added
+
+    if(isInCheck(true)) score -= 50;
+    if(isInCheck(false)) score += 50;
+
+    Move moves[256];
+    int count = 0;
+
+    generatePieceMoves(true, moves, count);
+    if (count == 0 && isInCheck(true)) score = -99999;  // White is checkmated
+    
+    count = 0;
+    generatePieceMoves(false, moves, count);
+    if (count == 0 && isInCheck(false)) score = 99999;  // Black is checkmated
+
+    return score;
+}
+
+void Board::order_moves(Move *moves, int moveCount) {
+    // if move != capture -> send to last 
+    for(int i = 0; i < moveCount; i++){
+        for(int j = i; j < moveCount - i - 1; j++) {
+            if(moves[i].pieceCaptured == -1){
+                swap(moves[i], moves[j]);
             }
         }
     }
-
-    whitePieces = whitePawn | whiteKnight | whiteBishop | whiteRook | whiteQueen | whiteKing;
-    blackPieces = blackPawn | blackKnight | blackBishop | blackRook | blackQueen | blackKing;
-
-    turn = !isWhite;
 }
 
-void Board::unmake_move(Move &mv) {
-    bool isWhite = mv.isWhite;
-    uint64_t *currentPiece;
-    switch(mv.pieceType) {
-        case PIECE_PAWN:
-            currentPiece = isWhite ? &whitePawn : &blackPawn;
-            break;
-        case PIECE_ROOK:
-            currentPiece = isWhite ? &whiteRook : &blackRook;
-            break;
-        case PIECE_BISHOP:
-            currentPiece = isWhite ? &whiteBishop : &blackBishop;
-            break;
-        case PIECE_KNIGHT:
-            currentPiece = isWhite ? &whiteKnight : &blackKnight;
-            break;
-        case PIECE_QUEEN:
-            currentPiece = isWhite ? &whiteQueen : &blackQueen;
-            break;
-        case PIECE_KING:
-            currentPiece = isWhite ? &whiteKing : &blackKing;
-            break;
+void print(Move *moves, int moveCount){
+    for (int i = 0; i < moveCount; i++)
+    {
+        cout << moves[i].pieceCaptured << " " << moves[i].endSquare << " ";
     }
-
-    if(mv.promotion != '-' && mv.pieceType == PIECE_PAWN) {
-        switch(mv.promotion) {
-            case 'Q':
-                if(isWhite) {
-                    whiteQueen &= ~(1ULL << mv.endSquare);
-                } else {
-                    blackQueen &= ~(1ULL << mv.endSquare);
-                }
-                break;
-            case 'R':
-                if(isWhite) {
-                    whiteRook &= ~(1ULL << mv.endSquare);
-                } else {
-                    blackRook &= ~(1ULL << mv.endSquare);
-                }
-                break;
-            case 'B':
-                if(isWhite) {
-                    whiteBishop &= ~(1ULL << mv.endSquare);
-                } else {
-                    blackBishop &= ~(1ULL << mv.endSquare);
-                }
-                break;
-            case 'N':
-                if(isWhite) {
-                    whiteKnight &= ~(1ULL << mv.endSquare);
-                } else {
-                    blackKnight &= ~(1ULL << mv.endSquare);
-                }
-                break;
-        }
-
-        *currentPiece |= (1ULL << mv.startSquare); // Place pawn back on startSquare
-    } else {
-        *currentPiece &= ~(1ULL << mv.endSquare);    
-        *currentPiece |= (1ULL << mv.startSquare);  
-    }
-
-    if(mv.pieceCaptured != -1) {
-        uint64_t *capturedPieceBitboard = nullptr;
-
-        switch(mv.pieceCaptured) {
-            case PIECE_PAWN:
-                capturedPieceBitboard = isWhite ? &blackPawn : &whitePawn;
-                break;
-            case PIECE_ROOK:
-                capturedPieceBitboard = isWhite ? &blackRook : &whiteRook;
-                break;
-            case PIECE_BISHOP:
-                capturedPieceBitboard = isWhite ? &blackBishop : &whiteBishop;
-                break;
-            case PIECE_KNIGHT:
-                capturedPieceBitboard = isWhite ? &blackKnight : &whiteKnight;
-                break;
-            case PIECE_QUEEN:
-                capturedPieceBitboard = isWhite ? &blackQueen : &whiteQueen;
-                break;
-            case PIECE_KING:
-                capturedPieceBitboard = isWhite ? &blackKing : &whiteKing;
-                break;
-
-        }
-        if(capturedPieceBitboard != nullptr) {
-            *capturedPieceBitboard |= (1ULL << mv.endSquare);
-        }
-    }
-    whitePieces = whitePawn | whiteKnight | whiteBishop | whiteRook | whiteQueen | whiteKing;
-    blackPieces = blackPawn | blackKnight | blackBishop | blackRook | blackQueen | blackKing;
-    turn = !isWhite;
-
+    cout << "\n";
 }
+
+int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
+
+    if (depth == 0) {
+        moveSearched++;
+        return evaluateBoard();
+    }
+    
+    int localBest = isWhite ? -100000 : 100000;
+    Move bestLocalMove;
+    
+    Move moves[256];
+    int moveCount = 0;
+    
+    generatePieceMoves(isWhite, moves, moveCount);
+
+    for (int i = 0; i < moveCount; i++) {
+        make_move(moves[i]);
+        int score = alphaBeta(!isWhite, depth - 1, alpha, beta);
+        unmake_move(moves[i]);
+        
+        if (isWhite) {
+            if (score > localBest) {
+                localBest = score;
+                bestLocalMove = moves[i];
+            }
+            alpha = max(alpha, localBest);
+        } else {
+            if (score < localBest) {
+                localBest = score;
+                bestLocalMove = moves[i];
+            }
+            beta = min(beta, localBest);
+        }
+        
+        if (beta <= alpha) {
+            break; // Alpha-beta pruning
+        }
+    }
+    
+    // Store best move only at root
+    if (depth == initialDepth) {
+        bestMove = bestLocalMove;
+    }
+    
+    return localBest;
+}
+
+// new stuff added, remove if the engine breaks
+
+
+bool Board::isSquareAttacked(int square, bool byWhite) {
+    // Pawn attacks
+    uint64_t pawns = byWhite ? whitePawn : blackPawn;
+    int pawnDirection = byWhite ? -8 : 8;
+    if ((square + pawnDirection + 1) < 64 && (square + pawnDirection + 1) >= 0) {
+        if (pawns & (1ULL << (square + pawnDirection + 1))) return true;
+    }
+    if ((square + pawnDirection - 1) < 64 && (square + pawnDirection - 1) >= 0) {
+        if (pawns & (1ULL << (square + pawnDirection - 1))) return true;
+    }
+
+    // Knight attacks
+    uint64_t knights = byWhite ? whiteKnight : blackKnight;
+    uint64_t knightAttacks = knight_attacks[square];
+    if (knights & knightAttacks) return true;
+
+    // Bishop/Queen diagonal attacks
+    uint64_t bishopsQueens = byWhite ? 
+        (whiteBishop | whiteQueen) : (blackBishop | blackQueen);
+    for (int dir = 0; dir < 4; dir++) {
+        int target = square;
+        while (true) {
+            target += DIRECTIONS_DIAGONAL[dir];
+            if (target < 0 || target > 63) break;
+            if ((DIRECTIONS_DIAGONAL[dir] == 9 || DIRECTIONS_DIAGONAL[dir] == -7) 
+                && (target % 8 == 0)) break;
+            if ((DIRECTIONS_DIAGONAL[dir] == -9 || DIRECTIONS_DIAGONAL[dir] == 7) 
+                && ((target + 1) % 8 == 0)) break;
+            uint64_t targetBit = 1ULL << target;
+            if (bishopsQueens & targetBit) return true;
+            if (allPieces[target] != PIECE_NONE) break;
+        }
+    }
+
+    // Rook/Queen straight attacks
+    uint64_t rooksQueens = byWhite ? 
+        (whiteRook | whiteQueen) : (blackRook | blackQueen);
+    for (int dir = 0; dir < 4; dir++) {
+        int target = square;
+        while (true) {
+            target += DIRECTIONS_STRAIGHT[dir];
+            if (target < 0 || target > 63) break;
+            if (DIRECTIONS_STRAIGHT[dir] == 1 && (target % 8 == 0)) break;
+            if (DIRECTIONS_STRAIGHT[dir] == -1 && ((target + 1) % 8 == 0)) break;
+            uint64_t targetBit = 1ULL << target;
+            if (rooksQueens & targetBit) return true;
+            if (allPieces[target] != PIECE_NONE) break;
+        }
+    }
+
+    return false;
+}
+
+bool Board::isInCheck(bool isWhite) {
+    uint64_t king = isWhite ? whiteKing : blackKing;
+    int kingSquare = __builtin_ctzll(king);
+    return isSquareAttacked(kingSquare, !isWhite);
+}
+
+bool Board::isMoveLegal(Move &mv) {
+    make_move(mv);
+    bool legal = !isInCheck(mv.isWhite);
+    unmake_move(mv);
+    return legal;
+}
+
+
 
 
 
 int main() {
     Board b;
-    // cout << "\n";
     b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    Move moves[256];
-    int moveCount = 0;
-    for(int depth = 1; depth <= 7; depth++){
-        cout << b.perft(depth, true) << "\n";
+
+    // bool isWhite = true;
+    // for (int i = 0; i < 30; i++)
+    // {
+    //     b.alphaBeta(isWhite, initialDepth, -10000, 10000);
+    //     b.make_move(b.bestMove);
+    //     b.printGame();
+    //     isWhite = !isWhite;
+    // }
+    
+
+
+    int maxDepth = 7;
+    for(int depth = 1; depth <= maxDepth; depth++){
+        long totalNodes = b.perft2(depth, true);
+        cout << totalNodes << "\n";
     }
+
     return 0;
 }
