@@ -22,7 +22,6 @@ const uint64_t RANK_1 = 0xFF00000000000000;
 const int DIRECTIONS_STRAIGHT[4] = {8, -8, 1, -1}; // down, up, right, left
 const int DIRECTIONS_DIAGONAL[4] = {9, -9, 7, -7}; // bottom-right, top-left, bottom-left, top-right
 
-
 const int PIECE_NONE = 6;
 const int PIECE_PAWN = 0;
 const int PIECE_ROOK = 1;
@@ -36,7 +35,7 @@ const uint8_t COLOR_BLACK = 0;
 const uint8_t PIECE_MASK = 0x7;
 const uint8_t COLOR_MASK = 0x8;
 
-int initialDepth = 5;
+int initialDepth = 6;
 
 struct Move {
     bool isWhite;          // True if white, false if black
@@ -70,70 +69,70 @@ private:
     uint64_t blackQueen = 0;
     uint64_t blackPieces = 0;
     
-    int knight_pref[64] = {
-        -66, -53, -75, -75, -10, -55, -58, -70,
-        -3,  -6, 100, -36,   4,  62,  -4, -14,
-        10,  67,   1,  74,  73,  27,  62,  -2,
-        24,  24,  45,  37,  33,  41,  25,  17,
-        -1,   5,  31,  21,  22,  35,   2,   0,
-        -18,  10,  13,  22,  18,  15,  11, -14,
-        -23, -15,   2,   0,   2,   0, -23, -20,
-        -74, -23, -26, -24, -19, -35, -22, -69
+    int knight_pst[64] = {
+        -167, -89, -34, -49,  61, -97, -15, -107,
+        -73, -41,  72,  36,  23,  62,   7,  -17,
+        -47,  60,  37,  65,  84, 129,  73,   44,
+        -9,  17,  19,  53,  37,  69,  18,   22,
+        -13,   4,  16,  13,  28,  19,  21,   -8,
+        -23,  -9,  12,  10,  19,  17,  25,  -16,
+        -29, -53, -12,  -3,  -1,  18, -14,  -19,
+        -105, -21, -58, -33, -17, -28, -19,  -23,
     };
 
-    int pawn_pref[64] = {
-        0,   0,   0,   0,   0,   0,   0,   0,
-        78,  83,  86,  73, 102,  82,  85,  90,
-        7,  29,  21,  44,  40,  31,  44,   7,
-        -17,  16,  -2,  15,  14,   0,  15, -13,
-        -26,   3,  10,   9,   6,   1,   0, -23,
-        -22,   9,   5, -11, -10,  -2,   3, -19,
-        -31,   8,  -7, -37, -36, -14,   3, -31,
-        0,   0,   0,   0,   0,   0,   0,   0
+    int pawn_pst[64] = {
+        0,   0,   0,   0,   0,   0,  0,   0,
+        98, 134,  61,  95,  68, 126, 34, -11,
+        -6,   7,  26,  31,  65,  56, 25, -20,
+        -14,  13,   6,  21,  23,  12, 17, -23,
+        -27,  -2,  -5,  12,  17,   6, 10, -25,
+        -26,  -4,  -4, -10,   3,   3, 33, -12,
+        -35,  -1, -20, -23, -15,  24, 38, -22,
+        0,   0,   0,   0,   0,   0,  0,   0,
     };
 
-    int bishop_pref[64] = {
-        -59, -78, -82, -76, -23,-107, -37, -50,
-        -11,  20,  35, -42, -39,  31,   2, -22,
-        -9,  39, -32,  41,  52, -10,  28, -14,
-        25,  17,  20,  34,  26,  25,  15,  10,
-        13,  10,  17,  23,  17,  16,   0,   7,
-        14,  25,  24,  15,   8,  25,  20,  15,
-        19,  20,  11,   6,   7,   6,  20,  16,
-        -7,   2, -15, -12, -14, -15, -10, -10
+    int bishop_pst[64] = {
+        -29,   4, -82, -37, -25, -42,   7,  -8,
+        -26,  16, -18, -13,  30,  59,  18, -47,
+        -16,  37,  43,  40,  35,  50,  37,  -2,
+        -4,   5,  19,  50,  37,  37,   7,  -2,
+        -6,  13,  13,  26,  34,  12,  10,   4,
+        0,  15,  15,  15,  14,  27,  18,  10,
+        4,  15,  16,   0,   7,  21,  33,   1,
+        -33,  -3, -14, -21, -13, -12, -39, -21,
     };
 
-    int rook_pref[64] = {
-        35,  29,  33,   4,  37,  33,  56,  50,
-        55,  29,  56,  67,  55,  62,  34,  60,
-        19,  35,  28,  33,  45,  27,  25,  15,
-        0,   5,  16,  13,  18,  -4,  -9,  -6,
-        -28, -35, -16, -21, -13, -29, -46, -30,
-        -42, -28, -42, -25, -25, -35, -26, -46,
-        -53, -38, -31, -26, -29, -43, -44, -53,
-        -30, -24, -18,   5,  -2, -18, -31, -32
+    int rook_pst[64] = {
+        32,  42,  32,  51, 63,  9,  31,  43,
+        27,  32,  58,  62, 80, 67,  26,  44,
+        -5,  19,  26,  36, 17, 45,  61,  16,
+        -24, -11,   7,  26, 24, 35,  -8, -20,
+        -36, -26, -12,  -1,  9, -7,   6, -23,
+        -45, -25, -16, -17,  3,  0,  -5, -33,
+        -44, -16, -20,  -9, -1, 11,  -6, -71,
+        -19, -13,   1,  17, 16,  7, -37, -26,
     };
     
-    int queen_pref[64] = {
-        6,   1,  -8,-104,  69,  24,  88,  26,
-        14,  32,  60, -10,  20,  76,  57,  24,
-        -2,  43,  32,  60,  72,  63,  43,   2,
-        1, -16,  22,  17,  25,  20, -13,  -6,
-        -14, -15,  -2,  -5,  -1, -10, -20, -22,
-        -30,  -6, -13, -11, -16, -11, -16, -27,
-        -36, -18,   0, -19, -15, -15, -21, -38,
-        -39, -30, -31, -13, -31, -36, -34, -42
+    int queen_pst[64] = {
+        -28,   0,  29,  12,  59,  44,  43,  45,
+        -24, -39,  -5,   1, -16,  57,  28,  54,
+        -13, -17,   7,   8,  29,  56,  47,  57,
+        -27, -27, -16, -16,  -1,  17,  -2,   1,
+        -9, -26,  -9, -10,  -2,  -4,   3,  -3,
+        -14,   2, -11,  -2,  -5,   2,  14,   5,
+        -35,  -8,  11,   2,   8,  15,  -3,   1,
+        -1, -18,  -9,  10, -15, -25, -31, -50,
     };
     
-    int king_pref[64] = {
-        4,  54,  47, -99, -99,  60,  83, -62,
-        -32,  10,  55,  56,  56,  55,  10,   3,
-        -62,  12, -57,  44, -67,  28,  37, -31,
-        -55,  50,  11,  -4, -19,  13,   0, -49,
-        -55, -43, -52, -28, -51, -47,  -8, -50,
-        -47, -42, -43, -79, -64, -32, -29, -32,
-        -4,   3, -14, -50, -57, -18,  13,   4,
-        17,  30,  -3, -14,   6,  -1,  40,  18
+    int king_pst[64] = {
+        -65,  23,  16, -15, -56, -34,   2,  13,
+        29,  -1, -20,  -7,  -8,  -4, -38, -29,
+        -9,  24,   2, -16, -20,   6,  22, -22,
+        -17, -20, -12, -27, -30, -25, -14, -36,
+        -49,  -1, -27, -39, -46, -44, -33, -51,
+        -14, -14, -22, -46, -44, -30, -15, -27,
+        1,   7,  -8, -64, -43, -16,   9,   8,
+        -15,  36,  12, -54,   8, -28,  24,  14,
     };
 
 
@@ -450,7 +449,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
     }
 
     uint64_t rooks = isWhite ? whiteRook : blackRook;
-    while(rooks && moveCount < 256) {
+    while(rooks && moveCount < 1024) {
         int single_rook = __builtin_ctzll(rooks);
         rooks &= rooks-1;
         for(int dir = 0; dir < 4; dir++) {
@@ -470,13 +469,13 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 } else {
                     moveArray[moveCount++] = Move(isWhite, PIECE_ROOK, single_rook, target, PIECE_NONE, '-');
                 }
-                if(moveCount >= 256) break;
+                if(moveCount >= 1024) break;
             }
         }
     }
 
     uint64_t bishops = isWhite ? whiteBishop : blackBishop;
-    while(bishops && moveCount < 256) {
+    while(bishops && moveCount < 1024) {
         int single_bishop = __builtin_ctzll(bishops);
         bishops &= bishops - 1; 
         for(int dir = 0; dir < 4; dir++) {
@@ -496,7 +495,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 } else {
                     moveArray[moveCount++] = Move(isWhite, PIECE_BISHOP, single_bishop, target, PIECE_NONE, '-');
                 }
-                if(moveCount >= 256) break;
+                if(moveCount >= 1024) break;
             }
         }
     }
@@ -504,7 +503,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
     const int DIRECTIONS_QUEEN[8] = {8, -8, 1, -1, 9, -7, -9, 7}; 
 
     uint64_t queens = isWhite ? whiteQueen : blackQueen;
-    while(queens && moveCount < 256) {
+    while(queens && moveCount < 1024) {
         int queenSquare = __builtin_ctzll(queens);
         queens &= queens - 1;
         for(int dir = 0; dir < 8; dir++) {
@@ -530,14 +529,14 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 } else {
                     moveArray[moveCount++] = Move(isWhite, PIECE_QUEEN, queenSquare, target, PIECE_NONE, '-');
                 }
-                if(moveCount >= 256) break;
+                if(moveCount >= 1024) break;
             }
         }
     }
     // king 
     const int DIRECTIONS_KING[8] = {8, 9, 1, -7, -8, -9, -1, 7}; // N, NE, E, SE, S, SW, W, NW
     uint64_t kings = isWhite ? whiteKing : blackKing;
-    while(kings && moveCount < 256) {
+    while(kings && moveCount < 1024) {
         int kingSquare = __builtin_ctzll(kings);
         kings &= kings-1;
         for(int dir = 0; dir < 8; dir++) {
@@ -558,14 +557,14 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 moveArray[moveCount++] = Move(isWhite, PIECE_KING, kingSquare, target, PIECE_NONE, '-');
             }
 
-            if(moveCount >= 256) break;
+            if(moveCount >= 1024) break;
         }
     }
 
     // pawn move gen
 
     uint64_t pawns = isWhite ? whitePawn : blackPawn;
-    while(pawns && moveCount < 256) {
+    while(pawns && moveCount < 1024) {
         int single_pawn = __builtin_ctzll(pawns);
         pawns &= pawns -1;
         if(isWhite) {
@@ -662,7 +661,7 @@ long Board::perft2(int depth, bool isWhite) {
         return 1;
 
     long nodes = 0;
-    Move moves[256];
+    Move moves[1024];
     int moveCount = 0;
 
     generatePieceMoves(isWhite, moves, moveCount);
@@ -798,7 +797,7 @@ long Board::perft(int depth, bool isWhite, int initialDepth = -1) {
         return 1;
     }
 
-    Move moveArray[256];
+    Move moveArray[1024];
     int moveCount = 0;
     generatePieceMoves(isWhite, moveArray, moveCount);
 
@@ -848,21 +847,8 @@ int Board::evaluateBoard() {
     score -= __builtin_popcount(blackRook) * ROOK_VALUE;
     score -= __builtin_popcount(blackQueen) * QUEEN_VALUE;
 
+    // // new stuff added
 
-    // new stuff added
-
-    if(isInCheck(true)) score -= 50;
-    if(isInCheck(false)) score += 50;
-
-    Move moves[256];
-    int count = 0;
-
-    generatePieceMoves(true, moves, count);
-    if (count == 0 && isInCheck(true)) score = -99999;  // White is checkmated
-    
-    count = 0;
-    generatePieceMoves(false, moves, count);
-    if (count == 0 && isInCheck(false)) score = 99999;  // Black is checkmated
 
     return score;
 }
@@ -896,7 +882,7 @@ int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
     int localBest = isWhite ? -100000 : 100000;
     Move bestLocalMove;
     
-    Move moves[256];
+    Move moves[1024];
     int moveCount = 0;
     
     generatePieceMoves(isWhite, moves, moveCount);
@@ -1003,29 +989,25 @@ bool Board::isMoveLegal(Move &mv) {
 }
 
 
-
-
-
 int main() {
     Board b;
     b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    // b.setupGameFromFEN("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
 
-    // bool isWhite = true;
-    // for (int i = 0; i < 30; i++)
-    // {
-    //     b.alphaBeta(isWhite, initialDepth, -10000, 10000);
-    //     b.make_move(b.bestMove);
-    //     b.printGame();
-    //     isWhite = !isWhite;
-    // }
-    
-
-
-    int maxDepth = 7;
-    for(int depth = 1; depth <= maxDepth; depth++){
-        long totalNodes = b.perft2(depth, true);
-        cout << totalNodes << "\n";
+    bool isWhite = true;
+    for (int i = 0; i < 30; i++)
+    {
+        b.alphaBeta(isWhite, initialDepth, -10000, 10000);
+        b.make_move(b.bestMove);
+        b.printGame();
+        isWhite = !isWhite;
     }
+    
+    // int maxDepth = 1;
+    // for(int depth = 1; depth <= maxDepth; depth++){
+    //     long totalNodes = b.perft(depth, true);
+    //     cout << totalNodes << "\n";
+    // }
 
     return 0;
 }
