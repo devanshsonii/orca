@@ -22,20 +22,20 @@ const uint64_t RANK_1 = 0xFF00000000000000;
 const int DIRECTIONS_STRAIGHT[4] = {8, -8, 1, -1}; // down, up, right, left
 const int DIRECTIONS_DIAGONAL[4] = {9, -9, 7, -7}; // bottom-right, top-left, bottom-left, top-right
 
-const int PIECE_NONE = 6;
 const int PIECE_PAWN = 0;
 const int PIECE_ROOK = 1;
 const int PIECE_BISHOP = 2; 
 const int PIECE_QUEEN = 3;
 const int PIECE_KNIGHT = 4;
 const int PIECE_KING = 5;
+const int PIECE_NONE = 6;
 
 const uint8_t COLOR_WHITE = 0x8;
 const uint8_t COLOR_BLACK = 0;
 const uint8_t PIECE_MASK = 0x7;
 const uint8_t COLOR_MASK = 0x8;
 
-int initialDepth = 6;
+int initialDepth = 7;
 
 struct Move {
     bool isWhite;          // True if white, false if black
@@ -135,6 +135,14 @@ private:
         -15,  36,  12, -54,   8, -28,  24,  14,
     };
 
+    int* psts[6] = {
+        pawn_pst,
+        rook_pst,
+        bishop_pst,
+        queen_pst,
+        knight_pst,
+        king_pst
+    };
 
     bool whiteCanCastleKingSide;
     bool whiteCanCastleQueenSide;
@@ -204,6 +212,7 @@ public:
 
     bool isMoveLegal(Move &mv);
 
+    bool play(string moveStr);
 
 
 };
@@ -827,28 +836,63 @@ long Board::perft(int depth, bool isWhite, int initialDepth = -1) {
 }
 
 int Board::evaluateBoard() {
+
     const int PAWN_VALUE = 100;
-    const int BISHOP_VALUE = 300;
-    const int KNIGHT_VALUE = 300;
+    const int KNIGHT_VALUE = 320;
+    const int BISHOP_VALUE = 330;
     const int ROOK_VALUE = 500;
     const int QUEEN_VALUE = 900;
 
     int score = 0;
-
-    score += __builtin_popcount(whitePawn) * PAWN_VALUE;
-    score += __builtin_popcount(whiteBishop) * BISHOP_VALUE;
-    score += __builtin_popcount(whiteKnight) * KNIGHT_VALUE;
-    score += __builtin_popcount(whiteRook) * ROOK_VALUE;
-    score += __builtin_popcount(whiteQueen) * QUEEN_VALUE;
-
-    score -= __builtin_popcount(blackPawn) * PAWN_VALUE;
-    score -= __builtin_popcount(blackBishop) * BISHOP_VALUE;
-    score -= __builtin_popcount(blackKnight) * KNIGHT_VALUE;
-    score -= __builtin_popcount(blackRook) * ROOK_VALUE;
-    score -= __builtin_popcount(blackQueen) * QUEEN_VALUE;
+    score += __builtin_popcountll(whitePawn) * PAWN_VALUE;
+    score += __builtin_popcountll(whiteBishop) * BISHOP_VALUE;
+    score += __builtin_popcountll(whiteKnight) * KNIGHT_VALUE;
+    score += __builtin_popcountll(whiteRook) * ROOK_VALUE;
+    score += __builtin_popcountll(whiteQueen) * QUEEN_VALUE;
+    score -= __builtin_popcountll(blackPawn) * PAWN_VALUE;
+    score -= __builtin_popcountll(blackBishop) * BISHOP_VALUE;
+    score -= __builtin_popcountll(blackKnight) * KNIGHT_VALUE;
+    score -= __builtin_popcountll(blackRook) * ROOK_VALUE;
+    score -= __builtin_popcountll(blackQueen) * QUEEN_VALUE;
 
     // // new stuff added
+    // for (int i = 0; i < 64; i++)
+    // {
+    //     if((allPieces[i] & PIECE_MASK) != PIECE_NONE) {
 
+    //     }
+    // }
+    
+    for (int i = 0; i < 64; i++)
+    {
+        uint8_t curr_piece = allPieces[i];
+        int isWhite = (curr_piece & COLOR_MASK) == 8;
+        int piece = (curr_piece & PIECE_MASK);
+        if(piece == PIECE_NONE) continue;
+        switch (piece) {
+            case PIECE_PAWN:
+                score += (isWhite ? pawn_pst[56^i] : -pawn_pst[i]);
+                break;
+            case PIECE_ROOK:
+                score += (isWhite ? rook_pst[56^i] : -rook_pst[i]);
+                break;
+            case PIECE_BISHOP:
+                score += (isWhite ? bishop_pst[56^i] : -bishop_pst[i]);
+                break;
+            case PIECE_KNIGHT:
+                score += (isWhite ? knight_pst[56^i] : -knight_pst[i]);
+                break;
+            case PIECE_QUEEN:
+                score += (isWhite ? queen_pst[56^i] : -queen_pst[i]);
+                break;
+            case PIECE_KING:
+                score += (isWhite ? king_pst[56^i] : -king_pst[i]);
+                break;
+        }
+    }
+
+    if(isInCheck(true)) score -= 50;
+    if(isInCheck(false)) score += 50;
 
     return score;
 }
@@ -886,7 +930,7 @@ int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
     int moveCount = 0;
     
     generatePieceMoves(isWhite, moves, moveCount);
-
+    // order_moves(moves, moveCount);
     for (int i = 0; i < moveCount; i++) {
         make_move(moves[i]);
         int score = alphaBeta(!isWhite, depth - 1, alpha, beta);
@@ -920,7 +964,6 @@ int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
 }
 
 // new stuff added, remove if the engine breaks
-
 
 bool Board::isSquareAttacked(int square, bool byWhite) {
     // Pawn attacks
@@ -988,22 +1031,76 @@ bool Board::isMoveLegal(Move &mv) {
     return legal;
 }
 
+int algebraicToIndex(string square) {
+    int file = square[0] - 'a';
+    int rank = '8' - square[1];
+    return rank * 8 + file;
+}
+
+bool Board::play(string moveStr) {
+    // Parse human move
+    if(moveStr.length() < 4) return false;
+    
+    int startSquare = algebraicToIndex(moveStr.substr(0,2));
+    int endSquare = algebraicToIndex(moveStr.substr(2,2));
+    
+    // Find and validate the move
+    Move moves[1024];
+    int moveCount = 0;
+    generatePieceMoves(true, moves, moveCount);
+    
+    Move* selectedMove = nullptr;
+    for(int i = 0; i < moveCount; i++) {
+        if(moves[i].startSquare == startSquare && moves[i].endSquare == endSquare) {
+            if(isMoveLegal(moves[i])) {
+                selectedMove = &moves[i];
+                break;
+            }
+        }
+    }
+    
+    if(!selectedMove) return false;
+    
+    // Make human move
+    make_move(*selectedMove);
+    
+    // Engine response
+    alphaBeta(false, initialDepth, -100000, 100000);
+    make_move(bestMove);
+    printGame();
+    
+    return true;
+}
 
 int main() {
     Board b;
     b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    // b.setupGameFromFEN("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
-
-    bool isWhite = true;
-    for (int i = 0; i < 30; i++)
-    {
-        b.alphaBeta(isWhite, initialDepth, -10000, 10000);
-        b.make_move(b.bestMove);
+    // b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1");
+    string move;
+    while(true) {
         b.printGame();
-        isWhite = !isWhite;
+        cout << "Enter move: ";
+        cin >> move;
+        if(!b.play(move)) {
+            cout << "Invalid Move\n";
+        }
     }
+    // b.printGame();
+    // b.alphaBeta(true, initialDepth, -100000, 100000);
+    // b.make_move(b.bestMove);
+    // b.printGame();
+    // cout << b.moveSearched << "\n";
+    // bool isWhite = false;
+    // for (int i = 0; i < 1; i++)
+    // {
+    //     b.alphaBeta(isWhite, initialDepth, -100000, 100000);
+    //     b.make_move(b.bestMove);
+    //     b.printGame();
+    //     cout << "Evaluation: " << b.evaluateBoard() << "\n";
+    //     isWhite = !isWhite;
+    // }
     
-    // int maxDepth = 1;
+    // int maxDepth = 6;
     // for(int depth = 1; depth <= maxDepth; depth++){
     //     long totalNodes = b.perft(depth, true);
     //     cout << totalNodes << "\n";
