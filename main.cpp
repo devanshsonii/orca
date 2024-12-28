@@ -21,6 +21,8 @@ const uint64_t RANK_1 = 0xFF00000000000000;
 
 const int DIRECTIONS_STRAIGHT[4] = {8, -8, 1, -1}; // down, up, right, left
 const int DIRECTIONS_DIAGONAL[4] = {9, -9, 7, -7}; // bottom-right, top-left, bottom-left, top-right
+const int DIRECTIONS_KING[8] = {8, 9, 1, -7, -8, -9, -1, 7}; // N, NE, E, SE, S, SW, W, NW
+
 
 const int PIECE_PAWN = 0;
 const int PIECE_ROOK = 1;
@@ -308,7 +310,7 @@ void Board::setupGameFromFEN(string moveSet) {
         index++;
     }
     index++; 
-    
+
     if(moveSet[index] == '-') {
         enPassantSquare = -1;
         index++;
@@ -331,6 +333,7 @@ void Board::setupGameFromFEN(string moveSet) {
         fullmoveNumber = fullmoveNumber * 10 + (moveSet[index] - '0');
         index++;
     }
+
 }
 
 void Board::printGame(){
@@ -543,7 +546,6 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
         }
     }
     // king 
-    const int DIRECTIONS_KING[8] = {8, 9, 1, -7, -8, -9, -1, 7}; // N, NE, E, SE, S, SW, W, NW
     uint64_t kings = isWhite ? whiteKing : blackKing;
     while(kings && moveCount < 1024) {
         int kingSquare = __builtin_ctzll(kings);
@@ -560,15 +562,66 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
             if(ownPieces & targetMask) {
                 continue;
             } 
-            else if(allPieces[target] != PIECE_NONE && ((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK))) {
-                moveArray[moveCount++] = Move(isWhite, PIECE_KING, kingSquare, target, (allPieces[target] & PIECE_MASK), '-');
-            } else {
-                moveArray[moveCount++] = Move(isWhite, PIECE_KING, kingSquare, target, PIECE_NONE, '-');
+            else {
+                // Create a temporary move
+                Move temp(isWhite, PIECE_KING, kingSquare, target, 
+                          (allPieces[target] & PIECE_MASK), '-');
+                
+                make_move(temp);
+                bool underCheck = isInCheck(isWhite);
+                unmake_move(temp);
+                
+                if(!underCheck) {
+                    moveArray[moveCount++] = temp;
+                }
             }
 
             if(moveCount >= 1024) break;
         }
     }
+
+    // Castling Test
+
+    if(isWhite) {
+        // White King on e1 => square 60
+        if((whiteKing & (1ULL << 60)) && !isInCheck(true)) {
+            if(whiteCanCastleKingSide &&
+               ((allPieces[61] & PIECE_MASK) == PIECE_NONE) && ((allPieces[62] & PIECE_MASK) == PIECE_NONE) && 
+               !isSquareAttacked(61, false) && !isSquareAttacked(62, false)) {
+                // Debug
+                // cout << "Adding white king-side castle\n";
+                moveArray[moveCount++] = Move(true, PIECE_KING, 60, 62, PIECE_NONE, 'C');
+            }
+            if(whiteCanCastleQueenSide &&
+               ((allPieces[59] & PIECE_MASK)==PIECE_NONE) && 
+               ((allPieces[58] & PIECE_MASK) == PIECE_NONE) &&
+               ((allPieces[57] & PIECE_MASK) == PIECE_NONE) && 
+               !isSquareAttacked(59, false) && !isSquareAttacked(58, false)) {
+                // Debug
+                // cout << "Adding white queen-side castle\n";
+                moveArray[moveCount++] = Move(true, PIECE_KING, 60, 58, PIECE_NONE, 'C');
+            }
+        }
+    } else {
+        // Black King on e8 => square 4
+        if((blackKing & (1ULL << 4)) && !isInCheck(false)) {
+            if(blackCanCastleKingSide &&
+               ((allPieces[5] & PIECE_MASK) == PIECE_NONE) && ((allPieces[6] & PIECE_MASK) == PIECE_NONE) &&
+               !isSquareAttacked(5, true) && !isSquareAttacked(6, true)) {
+                // cout << "Adding black king-side castle\n";
+                moveArray[moveCount++] = Move(false, PIECE_KING, 4, 6, PIECE_NONE, 'C');
+            }
+            if(blackCanCastleQueenSide &&
+               ((allPieces[3] & PIECE_MASK) == PIECE_NONE) && 
+               ((allPieces[2] & PIECE_MASK) == PIECE_NONE) &&
+               ((allPieces[1] & PIECE_MASK) == PIECE_NONE) &&
+               !isSquareAttacked(3, true) && !isSquareAttacked(2, true)) {
+                // cout << "Adding black queen-side castle\n";
+                moveArray[moveCount++] = Move(false, PIECE_KING, 4, 2, PIECE_NONE, 'C');
+            }
+        }
+    }
+
 
     // pawn move gen
 
@@ -717,6 +770,53 @@ void Board::make_move(Move &mv) {
         }
     }
 
+    // castling
+
+    if(mv.promotion == 'C' && mv.pieceType == PIECE_KING) {
+        // White
+        if(mv.isWhite) {
+            // King side castling e1->g1
+            if(mv.startSquare == 60 && mv.endSquare == 62) {
+                whiteRook &= ~(1ULL << 63); // remove rook from h1
+                whiteRook |=  (1ULL << 61); // place rook on f1
+                whitePieces &= ~(1ULL << 63);
+                whitePieces |=  (1ULL << 61);
+                whiteCanCastleKingSide = false;
+                whiteCanCastleQueenSide = false;
+            }
+            // Queen side castling e1->c1
+            else if(mv.startSquare == 60 && mv.endSquare == 58) {
+                whiteRook &= ~(1ULL << 56); // remove rook from a1
+                whiteRook |=  (1ULL << 59); // place rook on d1
+                whitePieces &= ~(1ULL << 56);
+                whitePieces |=  (1ULL << 59);
+                whiteCanCastleKingSide = false;
+                whiteCanCastleQueenSide = false;
+            }
+        } 
+        // Black
+        else {
+            // King side castling e8->g8
+            if(mv.startSquare == 4 && mv.endSquare == 6) {
+                blackRook &= ~(1ULL << 7); // remove rook from h8
+                blackRook |=  (1ULL << 5); // place rook on f8
+                blackPieces &= ~(1ULL << 7);
+                blackPieces |=  (1ULL << 5);
+                blackCanCastleKingSide = false;
+                blackCanCastleQueenSide = false;
+            }
+            // Queen side castling e8->c8
+            else if(mv.startSquare == 4 && mv.endSquare == 2) {
+                blackRook &= ~(1ULL << 0); // remove rook from a8
+                blackRook |=  (1ULL << 3); // place rook on d8
+                blackPieces &= ~(1ULL << 0);
+                blackPieces |=  (1ULL << 3);
+                blackCanCastleKingSide = false;
+                blackCanCastleQueenSide = false;
+            }
+        }
+    }
+
     // Move the piece
     uint64_t* movBoard = nullptr;
     switch(mv.pieceType) {
@@ -739,7 +839,6 @@ void Board::make_move(Move &mv) {
             blackPieces |= (1ULL << mv.endSquare);
         }
     }
-
     allPieces[mv.startSquare] = PIECE_NONE;
     allPieces[mv.endSquare] = side ? (COLOR_WHITE | mv.pieceType) : (COLOR_BLACK | mv.pieceType);
 }
@@ -767,6 +866,45 @@ void Board::unmake_move(Move &mv) {
         } else {
             blackPieces &= ~(1ULL << mv.endSquare);
             blackPieces |= (1ULL << mv.startSquare);
+        }
+    }
+
+    // castling
+
+    if(mv.promotion == 'C' && mv.pieceType == PIECE_KING) {
+        // White
+        if(mv.isWhite) {
+            // King side g1->e1
+            if(mv.startSquare == 60 && mv.endSquare == 62) {
+                whiteRook &= ~(1ULL << 61);
+                whiteRook |=  (1ULL << 63);
+                whitePieces &= ~(1ULL << 61);
+                whitePieces |=  (1ULL << 63);
+            }
+            // Queen side c1->e1
+            else if(mv.startSquare == 60 && mv.endSquare == 58) {
+                whiteRook &= ~(1ULL << 59);
+                whiteRook |=  (1ULL << 56);
+                whitePieces &= ~(1ULL << 59);
+                whitePieces |=  (1ULL << 56);
+            }
+        } 
+        // Black
+        else {
+            // King side g8->e8
+            if(mv.startSquare == 4 && mv.endSquare == 6) {
+                blackRook &= ~(1ULL << 5);
+                blackRook |=  (1ULL << 7);
+                blackPieces &= ~(1ULL << 5);
+                blackPieces |=  (1ULL << 7);
+            }
+            // Queen side c8->e8
+            else if(mv.startSquare == 4 && mv.endSquare == 2) {
+                blackRook &= ~(1ULL << 3);
+                blackRook |=  (1ULL << 0);
+                blackPieces &= ~(1ULL << 3);
+                blackPieces |=  (1ULL << 0);
+            }
         }
     }
 
@@ -893,19 +1031,47 @@ int Board::evaluateBoard() {
 
     if(isInCheck(true)) score -= 50;
     if(isInCheck(false)) score += 50;
+    // // checkmates
+    // Move moves[1024];
+    // int moveCount = 0;
+    // // white checkmated
+    // generatePieceMoves(true, moves, moveCount);
+    // if(moveCount == 0) score -= 99999;
+    // moveCount = 0;
+    // // black checkmated
+    // generatePieceMoves(false, moves, moveCount);
+    // if(moveCount == 0) score += 99999;
 
     return score;
 }
 
-void Board::order_moves(Move *moves, int moveCount) {
-    // if move != capture -> send to last 
-    for(int i = 0; i < moveCount; i++){
-        for(int j = i; j < moveCount - i - 1; j++) {
-            if(moves[i].pieceCaptured == -1){
-                swap(moves[i], moves[j]);
-            }
-        }
+int value(int piece) {
+    switch (piece) {
+        case PIECE_PAWN:
+            return 100;
+        case PIECE_KNIGHT:
+            return 320;
+        case PIECE_BISHOP:
+            return 330;
+        case PIECE_ROOK:
+            return 500;
+        case PIECE_QUEEN:
+            return 900;
+        default:
+            return 0;
     }
+}
+
+int calculateScore(const Move &move) {
+    return value(move.pieceCaptured) - value(move.pieceType);
+}
+
+bool compareMoves(const Move &a, const Move &b) {
+    return calculateScore(a) > calculateScore(b);
+}
+
+void Board::order_moves(Move *moves, int moveCount) {
+    sort(moves, moves+moveCount, compareMoves);
 }
 
 void print(Move *moves, int moveCount){
@@ -930,7 +1096,7 @@ int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
     int moveCount = 0;
     
     generatePieceMoves(isWhite, moves, moveCount);
-    // order_moves(moves, moveCount);
+    order_moves(moves, moveCount);
     for (int i = 0; i < moveCount; i++) {
         make_move(moves[i]);
         int score = alphaBeta(!isWhite, depth - 1, alpha, beta);
@@ -964,54 +1130,94 @@ int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
 }
 
 // new stuff added, remove if the engine breaks
-
 bool Board::isSquareAttacked(int square, bool byWhite) {
     // Pawn attacks
     uint64_t pawns = byWhite ? whitePawn : blackPawn;
-    int pawnDirection = byWhite ? -8 : 8;
-    if ((square + pawnDirection + 1) < 64 && (square + pawnDirection + 1) >= 0) {
-        if (pawns & (1ULL << (square + pawnDirection + 1))) return true;
-    }
-    if ((square + pawnDirection - 1) < 64 && (square + pawnDirection - 1) >= 0) {
-        if (pawns & (1ULL << (square + pawnDirection - 1))) return true;
+    if (byWhite) {
+        int attack1 = square + 7;
+        int attack2 = square + 9;
+
+        if (attack1 >= 0 && (attack1 % 8 != 7)) { 
+            if (pawns & (1ULL << attack1)) {
+                return true;
+            }
+        }
+        if (attack2 >= 0 && (attack2 % 8 != 0)) { 
+            if (pawns & (1ULL << attack2)) {
+                return true;
+            }
+        }
+    } else {
+        int attack1 = square - 7;
+        int attack2 = square - 9;
+
+        if (attack1 < 64 && (attack1 % 8 != 7)) {
+            if (pawns & (1ULL << attack1)) {
+                return true;
+            }
+        }
+        if (attack2 < 64 && (attack2 % 8 != 0)) {
+            if (pawns & (1ULL << attack2)) {
+                return true;
+            }
+        }
     }
 
     // Knight attacks
     uint64_t knights = byWhite ? whiteKnight : blackKnight;
     uint64_t knightAttacks = knight_attacks[square];
-    if (knights & knightAttacks) return true;
+    if (knights & knightAttacks) {
+        return true;
+    }
 
     // Bishop/Queen diagonal attacks
-    uint64_t bishopsQueens = byWhite ? 
-        (whiteBishop | whiteQueen) : (blackBishop | blackQueen);
+    uint64_t bishopsQueens = byWhite ? (whiteBishop | whiteQueen) : (blackBishop | blackQueen);
     for (int dir = 0; dir < 4; dir++) {
         int target = square;
         while (true) {
             target += DIRECTIONS_DIAGONAL[dir];
             if (target < 0 || target > 63) break;
-            if ((DIRECTIONS_DIAGONAL[dir] == 9 || DIRECTIONS_DIAGONAL[dir] == -7) 
-                && (target % 8 == 0)) break;
-            if ((DIRECTIONS_DIAGONAL[dir] == -9 || DIRECTIONS_DIAGONAL[dir] == 7) 
-                && ((target + 1) % 8 == 0)) break;
+
+            if ((DIRECTIONS_DIAGONAL[dir] == 9 || DIRECTIONS_DIAGONAL[dir] == -7) && (target % 8 == 0)) break;
+            if ((DIRECTIONS_DIAGONAL[dir] == -9 || DIRECTIONS_DIAGONAL[dir] == 7) && ((target + 1) % 8 == 0)) break;
+
             uint64_t targetBit = 1ULL << target;
-            if (bishopsQueens & targetBit) return true;
+            if (bishopsQueens & targetBit) {
+                return true;
+            }
             if (allPieces[target] != PIECE_NONE) break;
         }
     }
 
-    // Rook/Queen straight attacks
-    uint64_t rooksQueens = byWhite ? 
-        (whiteRook | whiteQueen) : (blackRook | blackQueen);
+    uint64_t rooksQueens = byWhite ? (whiteRook | whiteQueen) : (blackRook | blackQueen);
     for (int dir = 0; dir < 4; dir++) {
         int target = square;
         while (true) {
             target += DIRECTIONS_STRAIGHT[dir];
             if (target < 0 || target > 63) break;
+
             if (DIRECTIONS_STRAIGHT[dir] == 1 && (target % 8 == 0)) break;
             if (DIRECTIONS_STRAIGHT[dir] == -1 && ((target + 1) % 8 == 0)) break;
+
             uint64_t targetBit = 1ULL << target;
-            if (rooksQueens & targetBit) return true;
+            if (rooksQueens & targetBit) {
+                return true;
+            }
             if (allPieces[target] != PIECE_NONE) break;
+        }
+    }
+
+    uint64_t opponentKing = byWhite ? whiteKing : blackKing;
+    for (int dir = 0; dir < 8; dir++) {
+        int adjacentSquare = square + DIRECTIONS_KING[dir];
+        if (adjacentSquare < 0 || adjacentSquare > 63) continue;
+
+        if ((DIRECTIONS_KING[dir] == 1 || DIRECTIONS_KING[dir] == -7 || DIRECTIONS_KING[dir] == 9) && (square % 8 == 7)) continue;  
+        if ((DIRECTIONS_KING[dir] == -1 || DIRECTIONS_KING[dir] == -9 || DIRECTIONS_KING[dir] == 7) && (square % 8 == 0)) continue;
+        if ((DIRECTIONS_KING[dir] == -9 || DIRECTIONS_KING[dir] == -7 || DIRECTIONS_KING[dir] == -8) && (square < 8)) continue;
+        if ((DIRECTIONS_KING[dir] == 9 || DIRECTIONS_KING[dir] == 8 || DIRECTIONS_KING[dir] == 7) && (square > 55)) continue;
+        if (opponentKing & (1ULL << adjacentSquare)) {
+            return true;
         }
     }
 
@@ -1041,6 +1247,36 @@ bool Board::play(string moveStr) {
     // Parse human move
     if(moveStr.length() < 4) return false;
     
+    // Detect castling moves
+    if(moveStr == "e1g1" || moveStr == "e1c1" || moveStr == "e8g8" || moveStr == "e8c8") {
+        // Determine if White or Black is castling
+        bool isWhiteCastling = (moveStr[1] == '1');
+        bool isKingside = (moveStr[2] == 'g' || moveStr[2] == 'g'); // e1g1 or e8g8
+        
+        // Create castling move
+        Move castlingMove;
+        castlingMove.isWhite = isWhiteCastling;
+        castlingMove.pieceType = PIECE_KING;
+        castlingMove.startSquare = algebraicToIndex(moveStr.substr(0,2));
+        castlingMove.endSquare = algebraicToIndex(moveStr.substr(2,2));
+        castlingMove.promotion = 'C'; // Indicate castling
+        
+        // Validate and make the castling move
+        if(isMoveLegal(castlingMove)) {
+            // Make human castling move
+            make_move(castlingMove);
+            
+            // Engine response
+            alphaBeta(false, initialDepth, -100000, 100000);
+            make_move(bestMove);
+            printGame();
+            
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     int startSquare = algebraicToIndex(moveStr.substr(0,2));
     int endSquare = algebraicToIndex(moveStr.substr(2,2));
     
@@ -1075,36 +1311,33 @@ bool Board::play(string moveStr) {
 int main() {
     Board b;
     b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    // b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1");
-    string move;
-    while(true) {
-        b.printGame();
-        cout << "Enter move: ";
-        cin >> move;
-        if(!b.play(move)) {
-            cout << "Invalid Move\n";
-        }
-    }
+    // b.setupGameFromFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
+    // b.setupGameFromFEN("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1");
+    
+    // Move moves[256];
+    // int count = 0;
     // b.printGame();
-    // b.alphaBeta(true, initialDepth, -100000, 100000);
-    // b.make_move(b.bestMove);
-    // b.printGame();
-    // cout << b.moveSearched << "\n";
-    // bool isWhite = false;
-    // for (int i = 0; i < 1; i++)
+    // b.generatePieceMoves(true, moves, count);
+    // for (int i = 0; i < count; i++)
     // {
-    //     b.alphaBeta(isWhite, initialDepth, -100000, 100000);
-    //     b.make_move(b.bestMove);
-    //     b.printGame();
-    //     cout << "Evaluation: " << b.evaluateBoard() << "\n";
-    //     isWhite = !isWhite;
+    //     cout << moves[i].startSquare << " " << moves[i].endSquare << "\n";
     // }
     
-    // int maxDepth = 6;
-    // for(int depth = 1; depth <= maxDepth; depth++){
-    //     long totalNodes = b.perft(depth, true);
-    //     cout << totalNodes << "\n";
+    // string move;
+    // while(true) {
+    //     b.printGame();
+    //     cout << "Enter move: ";
+    //     cin >> move;
+    //     if(!b.play(move)) {
+    //         cout << "Invalid Move\n";
+    //     }
     // }
+    
+    int maxDepth = 5;
+    for(int depth = 1; depth <= maxDepth; depth++){
+        long totalNodes = b.perft2(depth, true);
+        cout << totalNodes << "\n";
+    }
 
     return 0;
 }
