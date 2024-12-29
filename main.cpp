@@ -1323,21 +1323,21 @@ int main() {
     //     cout << moves[i].startSquare << " " << moves[i].endSquare << "\n";
     // }
     
-    // string move;
-    // while(true) {
-    //     b.printGame();
-    //     cout << "Enter move: ";
-    //     cin >> move;
-    //     if(!b.play(move)) {
-    //         cout << "Invalid Move\n";
-    //     }
-    // }
-    
-    int maxDepth = 5;
-    for(int depth = 1; depth <= maxDepth; depth++){
-        long totalNodes = b.perft2(depth, true);
-        cout << totalNodes << "\n";
+    string move;
+    while(true) {
+        b.printGame();
+        cout << "Enter move: ";
+        cin >> move;
+        if(!b.play(move)) {
+            cout << "Invalid Move\n";
+        }
     }
+    
+    // int maxDepth = 5;
+    // for(int depth = 1; depth <= maxDepth; depth++){
+    //     long totalNodes = b.perft2(depth, true);
+    //     cout << totalNodes << "\n";
+    // }
 
     return 0;
 }
