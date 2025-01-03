@@ -16,7 +16,6 @@ int main() {
     // {
     //     cout << moves[i].startSquare << " " << moves[i].endSquare << "\n";
     // }
-    
     string move;
     while(true) {
         b.printGame();

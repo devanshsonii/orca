@@ -1,7 +1,7 @@
 #include "Board.h"
 #include "Constants.h"
 
-int initialDepth = 6;
+int initialDepth = 7;
 
 void Board::setupGameFromFEN(string moveSet) {
     // Reset all bitboards
