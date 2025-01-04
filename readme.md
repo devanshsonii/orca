@@ -7,7 +7,7 @@
 ## Installation 
 
 ```
-git clone https://github.com/devanshsonii/Ocra
+git clone https://github.com/devanshsonii/orca
 cd Ocra/
 make && ./chess_engine
 ```
