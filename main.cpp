@@ -1,8 +1,10 @@
 #include "Board.h"
+#include <string>
+#include <cstring>
 using namespace std;
 
 
-int main() {
+int main(int argc, char* argv[]) {
     Board b;
     b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     // b.setupGameFromFEN("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ");
@@ -16,21 +18,27 @@ int main() {
     // {
     //     cout << moves[i].startSquare << " " << moves[i].endSquare << "\n";
     // }
-    string move;
-    while(true) {
-        b.printGame();
-        cout << "Enter move: ";
-        cin >> move;
-        if(!b.play(move)) {
-            cout << "Invalid Move\n";
-        }
+    for(int i = 0; i < argc; i++) {
+        if(strcmp(argv[i], "--perft") == 0) {
+            if(i == argc-1) {
+                cout << "--perft expects a numbers.\n";
+                return 12;
+            }
+            int maxDepth = atoi(argv[i+1]);
+            for(int depth = 1; depth <= maxDepth; depth++) {
+                cout << b.perft2(depth, true) << "\n";
+            }
+        } else if(strcmp(argv[i], "--play") == 0) {
+            string move;
+            while(true) {
+                b.printGame();
+                cout << "Enter move: ";
+                cin >> move;
+                if(!b.play(move)) {
+                    cout << "Invalid Move\n";
+                }
+            }
+        } 
     }
-    
-    // int maxDepth = 5;
-    // for(int depth = 1; depth <= maxDepth; depth++){
-    //     long totalNodes = b.perft2(depth, true);
-    //     cout << totalNodes << "\n";
-    // }
-
     return 0;
 }

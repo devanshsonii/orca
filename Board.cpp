@@ -1088,7 +1088,7 @@ bool Board::play(string moveStr) {
     alphaBeta(false, initialDepth, -100000, 100000);
     make_move(bestMove);
     printGame();
-    
+
     return true;
 }
 
