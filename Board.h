@@ -136,13 +136,7 @@ private:
         0x2000204000000000ULL, 0x4020000000000ULL, 0x8050000000000ULL, 0x110a0000000000ULL, 0x22140000000000ULL, 0x44280000000000ULL, 0x88500000000000ULL, 0x10a00000000000ULL, 0x20400000000000ULL
     };
 
-    string indexToAlgebraic(int index) {
-        if(index < 0 || index > 63) return "??";
-        char file = 'a' + (index % 8);
-        char rank = '1' + 7-(index / 8);
-        return string(1, file) + string(1, rank);
-    }
-
+    bool turn;
 
 public:
     Move bestMove;
@@ -185,6 +179,20 @@ public:
 
     bool play(string moveStr);
 
+    string indexToAlgebraic(int index) {
+        if(index < 0 || index > 63) return "??";
+        char file = 'a' + (index % 8);
+        char rank = '1' + 7-(index / 8);
+        return string(1, file) + string(1, rank);
+    }
+    
+    int algebraicToIndex(string square);
+    
+    Move search(int depth);
+    
+    bool getTurn() { return turn; }
+
+    int getPieceAt(int square);
 
 };
 

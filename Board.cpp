@@ -78,7 +78,7 @@ void Board::setupGameFromFEN(string moveSet) {
     whitePieces = whiteBishop | whiteKing | whitePawn | whiteKnight | whiteQueen | whiteRook;
     blackPieces = blackBishop | blackKing | blackPawn | blackKnight | blackQueen | blackRook;
     
-    index += 2; 
+    index ++; 
     
     whiteCanCastleKingSide = whiteCanCastleQueenSide = false;
     blackCanCastleKingSide = blackCanCastleQueenSide = false;
@@ -1021,11 +1021,6 @@ bool Board::isMoveLegal(Move &mv) {
     return legal;
 }
 
-int algebraicToIndex(string square) {
-    int file = square[0] - 'a';
-    int rank = '8' - square[1];
-    return rank * 8 + file;
-}
 
 bool Board::play(string moveStr) {
     // Parse human move
@@ -1091,4 +1086,41 @@ bool Board::play(string moveStr) {
 
     return true;
 }
+
+Move Board::search(int depth) {
+    int old_initialDepth = initialDepth;
+    initialDepth = depth;
+
+    alphaBeta(turn, depth, -100000, 100000);
+
+    initialDepth = old_initialDepth;
+    return bestMove;
+}
+
+int Board::algebraicToIndex(string square) {
+    int file = square[0] - 'a';
+    int rank = '8' - square[1];
+    return rank * 8 + file;
+}
+
+int Board::getPieceAt(int square) {
+    uint64_t mask = 1ULL << square;
+    
+    if (blackPawn & mask) return COLOR_BLACK | PIECE_PAWN;
+    if (blackRook & mask) return COLOR_BLACK | PIECE_ROOK;
+    if (blackBishop & mask) return COLOR_BLACK | PIECE_BISHOP;
+    if (blackQueen & mask) return COLOR_BLACK | PIECE_QUEEN;
+    if (blackKnight & mask) return COLOR_BLACK | PIECE_KNIGHT;
+    if (blackKing & mask) return COLOR_BLACK | PIECE_KING;
+    
+    if (whitePawn & mask) return COLOR_WHITE | PIECE_PAWN;
+    if (whiteRook & mask) return COLOR_WHITE | PIECE_ROOK;
+    if (whiteBishop & mask) return COLOR_WHITE | PIECE_BISHOP;
+    if (whiteQueen & mask) return COLOR_WHITE | PIECE_QUEEN;
+    if (whiteKnight & mask) return COLOR_WHITE | PIECE_KNIGHT;
+    if (whiteKing & mask) return COLOR_WHITE | PIECE_KING;
+    return -1;
+
+}
+
 
