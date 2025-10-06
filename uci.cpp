@@ -11,7 +11,7 @@ void UCI::applyMove(Board& board, const string& moveStr) {
     int piece = board.getPieceAt(startSquare);
     int capturedPiece = board.getPieceAt(endSquare);
     int pieceType = piece & 7; 
-    int capturedPieceType = (capturedPiece == 0) ? -1 : (capturedPiece & 7); 
+    int capturedPieceType = (capturedPiece & 7); 
 
     char promotion = '-';
     if (moveStr.length() > 4) {

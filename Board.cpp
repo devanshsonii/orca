@@ -245,7 +245,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
     }
 
     uint64_t rooks = isWhite ? whiteRook : blackRook;
-    while(rooks && moveCount < 1024) {
+    while(rooks && moveCount < 2048) {
         int single_rook = __builtin_ctzll(rooks);
         rooks &= rooks-1;
         for(int dir = 0; dir < 4; dir++) {
@@ -265,13 +265,13 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 } else {
                     moveArray[moveCount++] = Move(isWhite, PIECE_ROOK, single_rook, target, PIECE_NONE, '-');
                 }
-                if(moveCount >= 1024) break;
+                if(moveCount >= 2048) break;
             }
         }
     }
 
     uint64_t bishops = isWhite ? whiteBishop : blackBishop;
-    while(bishops && moveCount < 1024) {
+    while(bishops && moveCount < 2048) {
         int single_bishop = __builtin_ctzll(bishops);
         bishops &= bishops - 1; 
         for(int dir = 0; dir < 4; dir++) {
@@ -291,7 +291,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 } else {
                     moveArray[moveCount++] = Move(isWhite, PIECE_BISHOP, single_bishop, target, PIECE_NONE, '-');
                 }
-                if(moveCount >= 1024) break;
+                if(moveCount >= 2048) break;
             }
         }
     }
@@ -299,7 +299,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
     const int DIRECTIONS_QUEEN[8] = {8, -8, 1, -1, 9, -7, -9, 7}; 
 
     uint64_t queens = isWhite ? whiteQueen : blackQueen;
-    while(queens && moveCount < 1024) {
+    while(queens && moveCount < 2048) {
         int queenSquare = __builtin_ctzll(queens);
         queens &= queens - 1;
         for(int dir = 0; dir < 8; dir++) {
@@ -325,13 +325,13 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 } else {
                     moveArray[moveCount++] = Move(isWhite, PIECE_QUEEN, queenSquare, target, PIECE_NONE, '-');
                 }
-                if(moveCount >= 1024) break;
+                if(moveCount >= 2048) break;
             }
         }
     }
     // king 
     uint64_t kings = isWhite ? whiteKing : blackKing;
-    while(kings && moveCount < 1024) {
+    while(kings && moveCount < 2048) {
         int kingSquare = __builtin_ctzll(kings);
         kings &= kings-1;
         for(int dir = 0; dir < 8; dir++) {
@@ -360,7 +360,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 }
             }
 
-            if(moveCount >= 1024) break;
+            if(moveCount >= 2048) break;
         }
     }
 
@@ -410,7 +410,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
     // pawn move gen
 
     uint64_t pawns = isWhite ? whitePawn : blackPawn;
-    while(pawns && moveCount < 1024) {
+    while(pawns && moveCount < 2048) {
         int single_pawn = __builtin_ctzll(pawns);
         pawns &= pawns -1;
         if(isWhite) {
@@ -507,7 +507,7 @@ long Board::perft2(int depth, bool isWhite) {
         return 1;
 
     long nodes = 0;
-    Move moves[1024];
+    Move moves[2048];
     int moveCount = 0;
 
     generatePieceMoves(isWhite, moves, moveCount);
@@ -629,7 +629,6 @@ void Board::make_move(Move &mv) {
 
 void Board::unmake_move(Move &mv) {
     bool side = mv.isWhite;
-
     // Move piece back
     uint64_t* movBoard = nullptr;
     switch(mv.pieceType) {
@@ -728,7 +727,7 @@ long Board::perft(int depth, bool isWhite, int initialDepth = -1) {
         return 1;
     }
 
-    Move moveArray[1024];
+    Move moveArray[2048];
     int moveCount = 0;
     generatePieceMoves(isWhite, moveArray, moveCount);
 
@@ -816,7 +815,7 @@ int Board::evaluateBoard() {
     if(isInCheck(true)) score -= 50;
     if(isInCheck(false)) score += 50;
     // // checkmates
-    // Move moves[1024];
+    // Move moves[20481];
     // int moveCount = 0;
     // // white checkmated
     // generatePieceMoves(true, moves, moveCount);
@@ -876,7 +875,7 @@ int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
     int localBest = isWhite ? -100000 : 100000;
     Move bestLocalMove;
     
-    Move moves[1024];
+    Move moves[2048];
     int moveCount = 0;
     
     generatePieceMoves(isWhite, moves, moveCount);
@@ -1060,7 +1059,7 @@ bool Board::play(string moveStr) {
     int endSquare = algebraicToIndex(moveStr.substr(2,2));
     
     // Find and validate the move
-    Move moves[1024];
+    Move moves[2048];
     int moveCount = 0;
     generatePieceMoves(true, moves, moveCount);
     
