@@ -14,6 +14,9 @@ void UCI::applyMove(Board& board, const string& moveStr) {
     int capturedPieceType = (capturedPiece & 7); 
 
     char promotion = '-';
+    if (pieceType == 5 && startSquare == 60 && (endSquare == 62 || endSquare == 58)) {
+        promotion = 'C';
+    }
     if (moveStr.length() > 4) {
         promotion = toupper(moveStr[4]);
     }
@@ -68,6 +71,7 @@ void UCI::uciLoop() {
         } else if (token == "quit") {
             break;
         }
+        board.printGame();
     }
 }
 

@@ -237,6 +237,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
             uint64_t targetMask = (1ULL << target);
             if(ownPieces & targetMask) continue;
             if(allPieces[target] != PIECE_NONE && ((allPieces[target] & COLOR_MASK) != (isWhite ? COLOR_WHITE : COLOR_BLACK))) {
+                // moveArray[moveCount++] = create_move(isWhite, PIECE_KNIGHT, single_knight, target, (allPieces[target] & PIECE_MASK), PIECE_NONE);
                 moveArray[moveCount++] = Move(isWhite, PIECE_KNIGHT, single_knight, target, (allPieces[target] & PIECE_MASK), '-');
             } else {
                 moveArray[moveCount++] = Move(isWhite, PIECE_KNIGHT, single_knight, target, PIECE_NONE, '-');
@@ -377,7 +378,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
                 moveArray[moveCount++] = Move(true, PIECE_KING, 60, 62, PIECE_NONE, 'C');
             }
             if(whiteCanCastleQueenSide &&
-               ((allPieces[59] & PIECE_MASK)==PIECE_NONE) && 
+               ((allPieces[59] & PIECE_MASK) == PIECE_NONE) && 
                ((allPieces[58] & PIECE_MASK) == PIECE_NONE) &&
                ((allPieces[57] & PIECE_MASK) == PIECE_NONE) && 
                !isSquareAttacked(59, false) && !isSquareAttacked(58, false)) {
@@ -500,6 +501,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
     }
     moveCount = legalMoveCount;
     
+    
 }
 
 long Board::perft2(int depth, bool isWhite) {
@@ -559,15 +561,13 @@ void Board::make_move(Move &mv) {
     if(mv.promotion == 'C' && mv.pieceType == PIECE_KING) {
         // White
         if(mv.isWhite) {
-            // King side castling e1->g1
-            if(mv.startSquare == 60 && mv.endSquare == 62) {
-                whiteRook &= ~(1ULL << 63); // remove rook from h1
-                whiteRook |=  (1ULL << 61); // place rook on f1
-                whitePieces &= ~(1ULL << 63);
-                whitePieces |=  (1ULL << 61);
-                whiteCanCastleKingSide = false;
-                whiteCanCastleQueenSide = false;
-            }
+            if(mv.endSquare == 62) { // Kingside
+                cerr << "MAKING KINGSIDE CASTLE\n";
+                cerr << "  Before: whiteRook = " << whiteRook << "\n";
+                whiteRook &= ~(1ULL << 63); // h1
+                whiteRook |= (1ULL << 61);  // f1
+                cerr << "  After:  whiteRook = " << whiteRook << "\n";
+            } 
             // Queen side castling e1->c1
             else if(mv.startSquare == 60 && mv.endSquare == 58) {
                 whiteRook &= ~(1ULL << 56); // remove rook from a1
@@ -657,14 +657,13 @@ void Board::unmake_move(Move &mv) {
     if(mv.promotion == 'C' && mv.pieceType == PIECE_KING) {
         // White
         if(mv.isWhite) {
-            // King side g1->e1
-            if(mv.startSquare == 60 && mv.endSquare == 62) {
-                whiteRook &= ~(1ULL << 61);
-                whiteRook |=  (1ULL << 63);
+            if(mv.endSquare == 62) { // Kingside
+                whiteRook |= (1ULL << 63);  // h1
+                whiteRook &= ~(1ULL << 61); // f1
                 whitePieces &= ~(1ULL << 61);
                 whitePieces |=  (1ULL << 63);
-            }
-            // Queen side c1->e1
+            } 
+            // Queen side castling e1->c1
             else if(mv.startSquare == 60 && mv.endSquare == 58) {
                 whiteRook &= ~(1ULL << 59);
                 whiteRook |=  (1ULL << 56);
@@ -674,14 +673,14 @@ void Board::unmake_move(Move &mv) {
         } 
         // Black
         else {
-            // King side g8->e8
+            // King side castling e8->g8
             if(mv.startSquare == 4 && mv.endSquare == 6) {
                 blackRook &= ~(1ULL << 5);
                 blackRook |=  (1ULL << 7);
                 blackPieces &= ~(1ULL << 5);
                 blackPieces |=  (1ULL << 7);
             }
-            // Queen side c8->e8
+            // Queen side castling e8->c8
             else if(mv.startSquare == 4 && mv.endSquare == 2) {
                 blackRook &= ~(1ULL << 3);
                 blackRook |=  (1ULL << 0);
@@ -866,7 +865,6 @@ void print(Move *moves, int moveCount){
 }
 
 int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
-
     if (depth == 0) {
         moveSearched++;
         return evaluateBoard();

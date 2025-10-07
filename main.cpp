@@ -32,5 +32,10 @@ int main(int argc, char* argv[]) {
     // }
     UCI uci;
     uci.uciLoop();
+    // Board b;
+    // b.setupGameFromFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    // for(int depth = 1; depth <= 7; depth++) {
+    //     cout << b.perft2(depth, true) << "\n";
+    // }
     return 0;
 }

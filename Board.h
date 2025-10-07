@@ -7,7 +7,17 @@
 #include <cstdint>
 using namespace std;
 
-
+/*
+    1       001     00000000    00000000(8)   010(3)        010(3)       0000000 (6)
+    color   piece   start       end        pieceCap   promotion reserved
+    1 -> color
+    3 -> pieceType (7 values)
+    8 -> startSquare
+    8 -> endSquare
+    3 -> pieceCaptured (7 values)
+    3 -> promotion (7 values)
+   = 26 bits
+*/
 struct Move {
     bool isWhite;          // True if white, false if black
     int pieceType;         // 0: Pawn, 1: Rook, 2: Bishop, 3: Queen, 4: Knight, 5: King

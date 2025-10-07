@@ -23,6 +23,34 @@ const int DIRECTIONS_STRAIGHT[4] = {8, -8, 1, -1}; // down, up, right, left
 const int DIRECTIONS_DIAGONAL[4] = {9, -9, 7, -7}; // bottom-right, top-left, bottom-left, top-right
 const int DIRECTIONS_KING[8] = {8, 9, 1, -7, -8, -9, -1, 7}; // N, NE, E, SE, S, SW, W, NW
 
+// const int PIECE_NONE = 0;
+// const int PIECE_PAWN = 1;
+// const int PIECE_ROOK = 2;
+// const int PIECE_BISHOP = 3;
+// const int PIECE_QUEEN = 4;
+// const int PIECE_KNIGHT = 5;
+// const int PIECE_KING = 6;
+
+// const uint32_t COLOR_MASK          = (1u << 31);
+// const uint32_t PIECE_MASK          = (7u << 28);
+// const uint32_t START_SQUARE_MASK   = (0xFFu << 20);
+// const uint32_t END_SQUARE_MASK     = (0xFFu << 12);
+// const uint32_t CAPTURED_PIECE_MASK = (7u << 9);
+// const uint32_t PROMOTION_MASK      = (7u << 6);
+// const uint32_t RESERVED_MASK       = (0x3Fu);
+
+// static constexpr uint32_t create_move(
+//     bool color, int piece, int start, int end,
+//     int captured, int promotion)
+// {
+//     return (uint32_t(color) << 31)
+//          | (uint32_t(piece)     << 28)
+//          | (uint32_t(start)     << 20)
+//          | (uint32_t(end)       << 12)
+//          | (uint32_t(captured)  << 9)
+//          | (uint32_t(promotion) << 6);
+// }
+
 
 const int PIECE_PAWN = 0;
 const int PIECE_ROOK = 1;
