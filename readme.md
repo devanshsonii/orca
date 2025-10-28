@@ -1,4 +1,4 @@
-# Ocra - Chess Engine
+# Orca - Chess Engine
 A chess engine implemented from scratch using C++.
 
 ## Current Capabilities 

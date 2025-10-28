@@ -57,7 +57,7 @@ void UCI::uciLoop() {
                 applyMove(board, moveStr);
             }
         } else if (token == "go") {
-            int depth = 6; 
+            int depth = 7; 
             string go_token;
             while(iss >> go_token) {
                 if (go_token == "depth") {
