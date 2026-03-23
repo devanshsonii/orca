@@ -1,8 +1,8 @@
 CXX = g++-15
 CXXFLAGS = -std=c++17 -O3
 
-SRCS = main.cpp Board.cpp uci.cpp
-HEADERS = Board.h Constants.h uci.h
+SRCS = main.cpp Board.cpp uci.cpp transposition.cpp
+HEADERS = Board.h Constants.h uci.h move.h transposition.h
 
 TARGET = chess_engine
 

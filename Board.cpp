@@ -1,5 +1,7 @@
+#include "move.h"
 #include "Board.h"
 #include "Constants.h"
+#include "transposition.h"
 
 int initialDepth = 7;
 
@@ -489,6 +491,7 @@ void Board::generatePieceMoves(bool isWhite, Move moveArray[], int &moveCount) {
             }
         }
     }
+    
     int legalMoveCount = 0;
     for (int i = 0; i < moveCount; i++)
     {
@@ -519,7 +522,6 @@ long Board::perft2(int depth, bool isWhite) {
         nodes += perft2(depth - 1, !isWhite);
         unmake_move(moves[i]);
     }
-
     return nodes;
 }
 
@@ -536,6 +538,8 @@ void Board::make_move(Move &mv) {
 
     // Remove captured piece if any
     if(mv.pieceCaptured != PIECE_NONE) {
+        int capColoredPiece = mv.pieceCaptured + (mv.isWhite ? 6 : 0);
+        boardHash ^= z.keys[capColoredPiece][mv.endSquare];
         uint64_t* capBoard = nullptr;
         switch(mv.pieceCaptured) {
             case PIECE_PAWN:   capBoard = side ? &blackPawn   : &whitePawn;   break;
@@ -623,9 +627,13 @@ void Board::make_move(Move &mv) {
             blackPieces |= (1ULL << mv.endSquare);
         }
     }
-    
     allPieces[mv.startSquare] = PIECE_NONE;
     allPieces[mv.endSquare] = side ? (COLOR_WHITE | mv.pieceType) : (COLOR_BLACK | mv.pieceType);
+    // Zobrist hashing handled here
+    int coloredPiece = mv.pieceType + (mv.isWhite ? 0 : 6);
+    boardHash ^= z.keys[coloredPiece][mv.startSquare];
+    boardHash ^= z.keys[coloredPiece][mv.endSquare];
+    boardHash ^= z.turn;
 }
 
 void Board::unmake_move(Move &mv) {
@@ -693,6 +701,8 @@ void Board::unmake_move(Move &mv) {
 
     // Restore captured piece
     if(mv.pieceCaptured != PIECE_NONE) {
+        int capColoredPiece = mv.pieceCaptured + (mv.isWhite ? 6 : 0);
+        boardHash ^= z.keys[capColoredPiece][mv.endSquare]; // restore
         uint64_t* capBoard = nullptr;
         switch(mv.pieceCaptured) {
             case PIECE_PAWN:   capBoard = side ? &blackPawn   : &whitePawn;   break;
@@ -716,6 +726,12 @@ void Board::unmake_move(Move &mv) {
     allPieces[mv.startSquare] = side ? (COLOR_WHITE | mv.pieceType) : (COLOR_BLACK | mv.pieceType);
     allPieces[mv.endSquare] = mv.pieceCaptured != PIECE_NONE ? 
         (side ? (COLOR_BLACK | mv.pieceCaptured) : (COLOR_WHITE | mv.pieceCaptured)) : PIECE_NONE;
+
+    // Zobrist hashing handled here
+    int coloredPiece = mv.pieceType + (mv.isWhite ? 0 : 6);
+    boardHash ^= z.keys[coloredPiece][mv.startSquare];
+    boardHash ^= z.keys[coloredPiece][mv.endSquare];
+    boardHash ^= z.turn;
 }
 
 long Board::perft(int depth, bool isWhite, int initialDepth = -1) {
@@ -866,6 +882,12 @@ void print(Move *moves, int moveCount){
 }
 
 int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
+    TTEntry* entry = tt.probe(boardHash);
+    if(entry && entry->depth >= depth) {
+        // if(entry->flag == EXACT) 
+        skipped++;
+        return entry->score;
+    }
     if (depth == 0) {
         moveSearched++;
         return evaluateBoard();
@@ -907,7 +929,7 @@ int Board::alphaBeta(bool isWhite, int depth, int alpha, int beta) {
     if (depth == initialDepth) {
         bestMove = bestLocalMove;
     }
-    
+    tt.store(boardHash, localBest, depth, bestLocalMove, EXACT);
     return localBest;
 }
 
@@ -1121,4 +1143,25 @@ int Board::getPieceAt(int square) {
 
 }
 
+void Board::initHashing() {
+    random_device rd;
+    mt19937_64 gen(rd());
+    uniform_int_distribution<uint64_t> dist;
 
+    for(int p = 0; p < 12; p++) {
+        for(int s = 0; s < 64; s++) {
+            z.keys[p][s] = dist(gen);
+        }
+    }
+    z.turn = dist(gen);
+    boardHash = 0;
+    for(int sq = 0; sq < 64; sq++) {
+        if(allPieces[sq] != PIECE_NONE) {
+            int piece = allPieces[sq] & PIECE_MASK;
+            bool isWhitePiece = (allPieces[sq] & COLOR_MASK) == COLOR_WHITE;
+            int coloredPiece = piece + (isWhitePiece ? 0 : 6);
+            boardHash ^= z.keys[coloredPiece][sq];
+        }
+    }
+    if(!turn) boardHash ^= z.turn;
+}

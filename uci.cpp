@@ -30,6 +30,7 @@ void UCI::uciLoop() {
     Board board;
     string startpos_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     board.setupGameFromFEN(startpos_fen);
+    board.initHashing();
 
     string line;
     while (getline(cin, line)) {
@@ -71,6 +72,7 @@ void UCI::uciLoop() {
         } else if (token == "quit") {
             break;
         }
+        cout << "skipped: " << board.skipped << "\n";
         board.printGame();
     }
 }
